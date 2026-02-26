@@ -1,0 +1,24 @@
+{
+  "name": "@nocturne/server",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server/src/index.js",
+    "dev": "ts-node src/index.ts",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "ws": "^8.16.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.10",
+    "@types/uuid": "^9.0.7",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.2",
+    "ts-node": "^10.9.2",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.54.0"
+  }
+}
