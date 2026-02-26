@@ -1,0 +1,5 @@
+{
+  "name": "@nocturne/shared",
+  "version": "1.0.0",
+  "types": "src/types.ts"
+}
