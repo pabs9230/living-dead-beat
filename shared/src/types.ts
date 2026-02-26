@@ -1,5 +1,8 @@
 export type PlayerAction = 'idle' | 'move' | 'attack' | 'dodge';
 
+export const WORLD_WIDTH = 800;
+export const WORLD_HEIGHT = 600;
+
 export interface Player {
   id: string;
   nickname: string;

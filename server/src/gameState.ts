@@ -1,7 +1,5 @@
-import { Player, GameState, PlayerAction } from '../../shared/src/types';
+import { Player, GameState, PlayerAction, WORLD_WIDTH, WORLD_HEIGHT } from '../../shared/src/types';
 
-const WORLD_WIDTH = 800;
-const WORLD_HEIGHT = 600;
 const MOVE_SPEED = 5;
 const ACTION_COOLDOWN_MS = 500; // 500ms cooldown on attack/dodge
 

@@ -2,6 +2,7 @@ import { LoginScreen } from './ui/loginScreen';
 import { GameClient } from './network/gameClient';
 import { GameRenderer } from './rendering/renderer';
 import { InputHandler } from './input/inputHandler';
+import { GameState } from '../../shared/src/types';
 
 const WS_URL = `ws://${window.location.hostname}:3001`;
 
@@ -18,9 +19,9 @@ function main(): void {
       client.join(nickname);
     });
 
-    client.onJoinSuccess((playerId, _state) => {
+    client.onJoinSuccess((playerId, state) => {
       loginScreen.hide();
-      showGame(playerId, client);
+      showGame(playerId, client, state);
     });
 
     client.onServerFull(() => {
@@ -36,7 +37,7 @@ function main(): void {
   });
 }
 
-function showGame(playerId: string, client: GameClient): void {
+function showGame(playerId: string, client: GameClient, initialState: GameState): void {
   const gameScreen = document.getElementById('game-screen') as HTMLDivElement;
   const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
   gameScreen.style.display = 'block';
@@ -46,6 +47,7 @@ function showGame(playerId: string, client: GameClient): void {
   canvas.height = window.innerHeight;
 
   const renderer = new GameRenderer(canvas, playerId);
+  renderer.updateState(initialState);
   new InputHandler(client, canvas);
 
   client.onGameStateUpdate((state) => {

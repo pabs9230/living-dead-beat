@@ -1,4 +1,4 @@
-import { GameState, Player } from '../../../shared/src/types';
+import { GameState } from '../../../shared/src/types';
 
 // Sprite color palettes for different variants
 const SPRITE_COLORS = [
@@ -40,7 +40,8 @@ export class GameRenderer {
 
   updateState(state: GameState): void {
     // Update interpolation targets
-    for (const [id, player] of Object.entries(state.players) as [string, Player][]) {
+    Object.keys(state.players).forEach((id) => {
+      const player = state.players[id];
       const interp = this.interpolated.get(id);
       if (interp) {
         interp.targetX = player.x;
@@ -61,7 +62,7 @@ export class GameRenderer {
           animTimer: 0,
         });
       }
-    }
+    });
 
     // Remove players that left
     for (const id of this.interpolated.keys()) {

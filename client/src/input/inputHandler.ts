@@ -1,4 +1,5 @@
 import { GameClient } from '../network/gameClient';
+import { WORLD_WIDTH, WORLD_HEIGHT } from '../../../shared/src/types';
 
 const MOVE_SPEED = 4;
 const SEND_RATE = 50; // Send position updates every 50ms
@@ -48,8 +49,8 @@ export class InputHandler {
     if (this.keys.has('ArrowDown') || this.keys.has('s') || this.keys.has('S')) dy += MOVE_SPEED;
 
     if (dx !== 0 || dy !== 0) {
-      this.playerX = Math.max(0, Math.min(800, this.playerX + dx));
-      this.playerY = Math.max(0, Math.min(600, this.playerY + dy));
+      this.playerX = Math.max(0, Math.min(WORLD_WIDTH, this.playerX + dx));
+      this.playerY = Math.max(0, Math.min(WORLD_HEIGHT, this.playerY + dy));
 
       const now = Date.now();
       if (now - this.lastSendTime >= SEND_RATE) {
