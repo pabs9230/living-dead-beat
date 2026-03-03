@@ -1,7 +1,16 @@
 export type PlayerAction = 'idle' | 'move' | 'attack' | 'dodge';
 
-export const WORLD_WIDTH = 800;
-export const WORLD_HEIGHT = 600;
+export const WORLD_WIDTH = 1600;
+export const WORLD_HEIGHT = 1200;
+
+export type ObstacleType = 'tomb' | 'dead_tree' | 'dry_branch';
+
+export interface Obstacle {
+  id: number;
+  type: ObstacleType;
+  x: number;
+  y: number;
+}
 
 export interface Player {
   id: string;
@@ -16,6 +25,7 @@ export interface Player {
 export interface GameState {
   players: Record<string, Player>;
   tick: number;
+  obstacles: Obstacle[];
 }
 
 // Client -> Server events

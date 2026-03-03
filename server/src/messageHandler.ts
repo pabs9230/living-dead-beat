@@ -31,8 +31,8 @@ export function handleClientMessage(
       const player = {
         id: playerId,
         nickname,
-        x: Math.floor(Math.random() * 700) + 50,
-        y: Math.floor(Math.random() * 500) + 50,
+        x: Math.floor(Math.random() * 1400) + 100,
+        y: Math.floor(Math.random() * 1000) + 100,
         action: 'idle' as const,
         spriteVariant: Math.floor(Math.random() * NUM_SPRITE_VARIANTS),
         lastActionTime: 0,
