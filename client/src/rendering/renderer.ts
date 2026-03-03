@@ -1,11 +1,11 @@
-import { GameState } from '../../../shared/src/types';
+import { GameState, OBSTACLES } from '../../../shared/src/types';
 
-// Sprite color palettes for different variants
+// Monster/horror sprite palettes
 const SPRITE_COLORS = [
-  { body: '#a78bfa', outline: '#7c3aed', name: 'Violet' },
-  { body: '#34d399', outline: '#059669', name: 'Emerald' },
-  { body: '#f87171', outline: '#dc2626', name: 'Crimson' },
-  { body: '#60a5fa', outline: '#2563eb', name: 'Azure' },
+  { body: '#2a4a18', outline: '#1a2e0d', eye: '#ff4400', name: 'Undead' },   // zombie green
+  { body: '#3d1450', outline: '#240830', eye: '#cc00ff', name: 'Wraith' },   // purple wraith
+  { body: '#7a1a1a', outline: '#4a0f0f', eye: '#ff8800', name: 'Demon' },    // blood red demon
+  { body: '#0f2a3d', outline: '#081825', eye: '#00ccff', name: 'Specter' },  // spectral blue
 ];
 
 interface InterpolatedPlayer {
@@ -24,6 +24,13 @@ const ANIM_FRAME_DURATION = 150; // ms per animation frame
 const IDLE_FRAMES = 4;
 const ATTACK_FRAMES = 4;
 const DODGE_FRAMES = 4;
+
+// Character base size
+const SZ = 26;
+const HEAD_R = 13;
+const BODY_H = 32;
+// Vertical offset (0–1) within the skull where teeth begin
+const SKULL_TEETH_Y = 0.42;
 
 export class GameRenderer {
   private canvas: HTMLCanvasElement;
@@ -84,16 +91,18 @@ export class GameRenderer {
     const { width, height } = this.canvas;
     const ctx = this.ctx;
 
-    // Clear
-    ctx.fillStyle = '#0d0d1f';
+    // Graveyard ground
+    ctx.fillStyle = '#111008';
     ctx.fillRect(0, 0, width, height);
 
-    // Draw grid
-    this.drawGrid(ctx, width, height);
+    // Ground texture — subtle dirt patches
+    this.drawGround(ctx, width, height);
+
+    // Draw tombstone obstacles
+    this.drawObstacles(ctx);
 
     // Update interpolation and draw players
     for (const [id, interp] of this.interpolated) {
-      // Smooth interpolation
       const alpha = 0.2;
       interp.currentX += (interp.targetX - interp.currentX) * alpha;
       interp.currentY += (interp.targetY - interp.currentY) * alpha;
@@ -115,10 +124,11 @@ export class GameRenderer {
     requestAnimationFrame((t) => this.render(t));
   }
 
-  private drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-    ctx.strokeStyle = 'rgba(76, 29, 149, 0.15)';
+  private drawGround(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    // Subtle dirt/dead-grass ground marks
+    ctx.strokeStyle = 'rgba(40, 30, 10, 0.5)';
     ctx.lineWidth = 1;
-    const gridSize = 40;
+    const gridSize = 60;
     for (let x = 0; x < width; x += gridSize) {
       ctx.beginPath();
       ctx.moveTo(x, 0);
@@ -130,6 +140,65 @@ export class GameRenderer {
       ctx.moveTo(0, y);
       ctx.lineTo(width, y);
       ctx.stroke();
+    }
+    // Moonlight fog at the edges
+    const fog = ctx.createRadialGradient(width / 2, height / 2, height * 0.3, width / 2, height / 2, height * 0.8);
+    fog.addColorStop(0, 'rgba(0,0,0,0)');
+    fog.addColorStop(1, 'rgba(0,5,10,0.55)');
+    ctx.fillStyle = fog;
+    ctx.fillRect(0, 0, width, height);
+  }
+
+  private drawObstacles(ctx: CanvasRenderingContext2D): void {
+    for (const obs of OBSTACLES) {
+      ctx.save();
+      // Translate to center of tombstone
+      ctx.translate(obs.x + obs.width / 2, obs.y);
+      const hw = obs.width / 2;
+      const h = obs.height;
+
+      // Shadow cast on ground
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.beginPath();
+      ctx.ellipse(4, h + 3, hw * 0.8, 4, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Stone body
+      ctx.fillStyle = '#4e4e5a';
+      ctx.fillRect(-hw, h * 0.38, obs.width, h * 0.62);
+
+      // Arched top
+      ctx.fillStyle = '#5e5e6e';
+      ctx.beginPath();
+      ctx.arc(0, h * 0.38, hw, Math.PI, 0);
+      ctx.rect(-hw, 0, obs.width, h * 0.38);
+      ctx.fill();
+
+      // Outline
+      ctx.strokeStyle = '#2a2a38';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, h * 0.38, hw, Math.PI, 0);
+      ctx.lineTo(hw, h);
+      ctx.lineTo(-hw, h);
+      ctx.closePath();
+      ctx.stroke();
+
+      // Engraved cross
+      ctx.strokeStyle = '#383848';
+      ctx.lineWidth = 2;
+      const cx = 0;
+      const cy = h * 0.2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 9);
+      ctx.lineTo(cx, cy + 9);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx - 6, cy - 2);
+      ctx.lineTo(cx + 6, cy - 2);
+      ctx.stroke();
+
+      ctx.restore();
     }
   }
 
@@ -148,53 +217,103 @@ export class GameRenderer {
 
     // Action-based visual effects
     if (interp.action === 'attack') {
-      ctx.shadowColor = colors.body;
-      ctx.shadowBlur = 20;
-      // Attack swing indicator
+      ctx.shadowColor = '#ff2200';
+      ctx.shadowBlur = 28;
       const swingAngle = (interp.animFrame / ATTACK_FRAMES) * Math.PI;
-      ctx.strokeStyle = colors.body;
+      ctx.strokeStyle = '#ff2200';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(0, 0, 30, -Math.PI / 4, -Math.PI / 4 + swingAngle);
+      ctx.arc(0, -BODY_H / 2, 36, -Math.PI / 4, -Math.PI / 4 + swingAngle);
       ctx.stroke();
+      ctx.shadowBlur = 0;
     } else if (interp.action === 'dodge') {
-      ctx.globalAlpha = 0.5 + 0.5 * Math.sin(interp.animFrame * Math.PI / 2);
-      ctx.shadowColor = '#60a5fa';
-      ctx.shadowBlur = 15;
+      ctx.globalAlpha = 0.4 + 0.6 * Math.sin(interp.animFrame * Math.PI / 2);
+      ctx.shadowColor = '#00ffcc';
+      ctx.shadowBlur = 18;
     }
 
-    // Body - 32x48 pixel art style character
-    const size = 32;
+    // Idle bob
+    const bob = interp.action === 'idle' ? Math.sin(interp.animFrame * Math.PI / 2) * 1.5 : 0;
 
-    // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    // Ground shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.beginPath();
-    ctx.ellipse(0, size + 4, size * 0.8, 4, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, BODY_H / 2 + 4, SZ * 0.55, 4, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Cloak/body
-    const bobOffset = interp.action === 'idle' ? Math.sin(interp.animFrame * Math.PI / 2) * 1 : 0;
+    // Ragged cloak body (trapezoidal)
     ctx.fillStyle = colors.body;
-    ctx.fillRect(-size / 2, -size + bobOffset, size, size * 1.5);
-
-    // Outline
+    ctx.beginPath();
+    ctx.moveTo(-SZ / 2, -BODY_H / 2 + bob);
+    ctx.lineTo(SZ / 2, -BODY_H / 2 + bob);
+    ctx.lineTo(SZ / 2 + 5, BODY_H / 2 + bob);
+    ctx.lineTo(-SZ / 2 - 5, BODY_H / 2 + bob);
+    ctx.closePath();
+    ctx.fill();
     ctx.strokeStyle = colors.outline;
-    ctx.lineWidth = isLocal ? 2 : 1;
-    ctx.strokeRect(-size / 2, -size + bobOffset, size, size * 1.5);
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
 
-    // Eyes
-    ctx.fillStyle = '#f0f0f0';
-    const eyeY = -size * 0.5 + bobOffset;
-    ctx.fillRect(-size / 4 - 2, eyeY, 4, 4);
-    ctx.fillRect(size / 4 - 2, eyeY, 4, 4);
+    // Ragged bottom — jagged triangles
+    ctx.fillStyle = colors.body;
+    for (let i = 0; i < 3; i++) {
+      const rx = -SZ / 2 - 4 + i * ((SZ + 8) / 2);
+      ctx.beginPath();
+      ctx.moveTo(rx, BODY_H / 2 + bob);
+      ctx.lineTo(rx + (SZ + 8) / 4, BODY_H / 2 + 10 + bob);
+      ctx.lineTo(rx + (SZ + 8) / 2, BODY_H / 2 + bob);
+      ctx.closePath();
+      ctx.fill();
+    }
 
-    // Local player indicator (ring)
+    // Gnarled arms
+    ctx.strokeStyle = colors.outline;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-SZ / 2, -BODY_H / 4 + bob);
+    ctx.quadraticCurveTo(-SZ * 0.95, bob, -SZ * 0.85, BODY_H / 4 + bob);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(SZ / 2, -BODY_H / 4 + bob);
+    ctx.quadraticCurveTo(SZ * 0.95, bob, SZ * 0.85, BODY_H / 4 + bob);
+    ctx.stroke();
+
+    // Skull head
+    const headY = -BODY_H / 2 - HEAD_R + bob;
+    ctx.fillStyle = '#d0c498';
+    ctx.strokeStyle = colors.outline;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, headY, HEAD_R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Glowing eyes
+    ctx.fillStyle = colors.eye;
+    ctx.shadowColor = colors.eye;
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.ellipse(-HEAD_R * 0.38, headY - 1, 3, 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(HEAD_R * 0.38, headY - 1, 3, 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Skull teeth
+    ctx.fillStyle = '#f0e8d0';
+    for (let i = -1; i <= 1; i++) {
+      ctx.fillRect(i * 4 - 1.5, headY + HEAD_R * SKULL_TEETH_Y + bob, 3, 5);
+    }
+
+    // Local player indicator ring — sized to new character
     if (isLocal) {
-      ctx.strokeStyle = '#fff';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.82)';
       ctx.lineWidth = 1.5;
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
-      ctx.arc(0, 0, size * 1.2, 0, Math.PI * 2);
+      // Ring radius tuned to encompass the ~SZ-wide, ~(BODY_H + HEAD_R*2)-tall character
+      ctx.arc(0, 0, SZ + 4, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -206,14 +325,12 @@ export class GameRenderer {
     ctx.font = `${isLocal ? 'bold ' : ''}11px monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
-    
-    // Background for nickname
+    const nicknameY = y - BODY_H / 2 - HEAD_R * 2 - 6;
     const textWidth = ctx.measureText(interp.nickname).width;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(x - textWidth / 2 - 3, y - 32 - 16, textWidth + 6, 14);
-    
-    ctx.fillStyle = isLocal ? '#ffffff' : colors.body;
-    ctx.fillText(interp.nickname, x, y - 32);
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(x - textWidth / 2 - 3, nicknameY - 14, textWidth + 6, 14);
+    ctx.fillStyle = isLocal ? '#ffffff' : colors.eye;
+    ctx.fillText(interp.nickname, x, nicknameY);
     ctx.restore();
   }
 }
