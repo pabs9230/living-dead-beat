@@ -163,8 +163,8 @@ export class GameRenderer {
       ctx.shadowBlur = 15;
     }
 
-    // Body - 32x32 pixel art style character
-    const size = 16;
+    // Body - 32x48 pixel art style character
+    const size = 32;
 
     // Shadow
     ctx.fillStyle = 'rgba(0,0,0,0.3)';

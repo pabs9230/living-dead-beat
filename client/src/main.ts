@@ -48,7 +48,11 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
 
   const renderer = new GameRenderer(canvas, playerId);
   renderer.updateState(initialState);
-  new InputHandler(client, canvas);
+  const inputHandler = new InputHandler(client, canvas);
+  const localPlayer = initialState.players[playerId];
+  if (localPlayer) {
+    inputHandler.setPosition(localPlayer.x, localPlayer.y);
+  }
 
   client.onGameStateUpdate((state) => {
     renderer.updateState(state);
