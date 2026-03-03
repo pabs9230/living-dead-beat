@@ -33,7 +33,7 @@ export class LoginScreen {
 
   setLoading(loading: boolean): void {
     this.joinBtn.disabled = loading;
-    this.joinBtn.textContent = loading ? 'Connecting...' : 'Enter the Night';
+    this.joinBtn.textContent = loading ? 'Connecting...' : 'Enter the Graveyard';
   }
 
   setError(msg: string): void {
