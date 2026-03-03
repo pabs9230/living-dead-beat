@@ -7,9 +7,9 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #0a0a1a;
+      background: #0d1207;
       color: #e0e0e0;
-      font-family: 'Segoe UI', sans-serif;
+      font-family: 'Courier New', monospace;
       overflow: hidden;
       height: 100vh;
       display: flex;
@@ -26,39 +26,43 @@
     }
     #login-screen h1 {
       font-size: 3rem;
-      color: #a78bfa;
-      text-shadow: 0 0 20px #7c3aed;
-      letter-spacing: 4px;
+      color: #ff6eb4;
+      text-shadow: 0 0 18px #cc0060, 0 0 40px #660030;
+      letter-spacing: 5px;
     }
     #login-screen p {
-      color: #6b7280;
+      color: #7fff7a;
       font-size: 0.9rem;
+      text-shadow: 0 0 8px #1aaa15;
     }
     #nickname-input {
-      background: #1a1a2e;
-      border: 2px solid #4c1d95;
-      color: #e0e0e0;
+      background: #0a140a;
+      border: 2px solid #cc0060;
+      color: #ece8d0;
       padding: 12px 20px;
       font-size: 1.1rem;
-      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      border-radius: 4px;
       outline: none;
       width: 280px;
       text-align: center;
     }
-    #nickname-input:focus { border-color: #7c3aed; }
+    #nickname-input:focus { border-color: #ff6eb4; box-shadow: 0 0 8px #cc006080; }
     #join-btn {
-      background: #7c3aed;
-      color: white;
+      background: #cc0060;
+      color: #ece8d0;
       border: none;
       padding: 12px 40px;
       font-size: 1rem;
-      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      border-radius: 4px;
       cursor: pointer;
-      transition: background 0.2s;
+      letter-spacing: 2px;
+      transition: background 0.2s, box-shadow 0.2s;
     }
-    #join-btn:hover { background: #6d28d9; }
-    #join-btn:disabled { background: #4c1d95; cursor: not-allowed; }
-    #error-msg { color: #f87171; font-size: 0.9rem; min-height: 1.2em; }
+    #join-btn:hover { background: #ff2277; box-shadow: 0 0 12px #ff227780; }
+    #join-btn:disabled { background: #660030; cursor: not-allowed; box-shadow: none; }
+    #error-msg { color: #ff6eb4; font-size: 0.9rem; min-height: 1.2em; }
 
     /* Game Screen */
     #game-screen {
@@ -70,7 +74,7 @@
 
     #game-canvas {
       display: block;
-      background: #0d0d1f;
+      background: #111a0d;
     }
 
     /* Chat Window */
@@ -79,9 +83,9 @@
       bottom: 20px;
       left: 20px;
       width: 300px;
-      background: rgba(10, 10, 26, 0.85);
-      border: 1px solid #4c1d95;
-      border-radius: 8px;
+      background: rgba(8, 14, 5, 0.88);
+      border: 1px solid #cc0060;
+      border-radius: 4px;
       overflow: hidden;
     }
     #chat-messages {
@@ -96,42 +100,44 @@
       font-size: 0.8rem;
       line-height: 1.3;
     }
-    .chat-msg .sender { color: #a78bfa; font-weight: bold; }
-    .chat-msg .text { color: #d1d5db; }
+    .chat-msg .sender { color: #ff6eb4; font-weight: bold; }
+    .chat-msg .text { color: #c8d0b8; }
     #chat-input-row {
       display: flex;
-      border-top: 1px solid #4c1d95;
+      border-top: 1px solid #cc0060;
     }
     #chat-input {
       flex: 1;
       background: transparent;
       border: none;
-      color: #e0e0e0;
+      color: #ece8d0;
       padding: 8px;
       font-size: 0.85rem;
+      font-family: 'Courier New', monospace;
       outline: none;
     }
     #chat-send {
-      background: #7c3aed;
+      background: #cc0060;
       border: none;
-      color: white;
+      color: #ece8d0;
       padding: 8px 12px;
       cursor: pointer;
       font-size: 0.8rem;
+      font-family: 'Courier New', monospace;
     }
-    #chat-send:hover { background: #6d28d9; }
+    #chat-send:hover { background: #ff2277; }
 
     /* Player count */
     #hud {
       position: absolute;
       top: 15px;
       right: 20px;
-      background: rgba(10, 10, 26, 0.75);
-      border: 1px solid #4c1d95;
-      border-radius: 6px;
+      background: rgba(8, 14, 5, 0.82);
+      border: 1px solid #cc0060;
+      border-radius: 4px;
       padding: 8px 14px;
       font-size: 0.85rem;
-      color: #a78bfa;
+      color: #ff6eb4;
     }
 
     /* Controls hint */
@@ -139,12 +145,12 @@
       position: absolute;
       top: 15px;
       left: 20px;
-      background: rgba(10, 10, 26, 0.75);
-      border: 1px solid #4c1d95;
-      border-radius: 6px;
+      background: rgba(8, 14, 5, 0.82);
+      border: 1px solid #cc0060;
+      border-radius: 4px;
       padding: 8px 14px;
       font-size: 0.78rem;
-      color: #6b7280;
+      color: #7fff7a;
       line-height: 1.6;
     }
   </style>
@@ -154,7 +160,7 @@
     <h1>LIVING DEAD BEAT</h1>
     <p>Enter a nickname to join the game</p>
     <input id="nickname-input" type="text" placeholder="Your nickname..." maxlength="20" autocomplete="off" />
-    <button id="join-btn">Enter the Night</button>
+    <button id="join-btn">Enter the Graveyard</button>
     <div id="error-msg"></div>
   </div>
 
@@ -163,8 +169,8 @@
     <div id="hud">Players: <span id="player-count">0</span>/10</div>
     <div id="controls-hint">
       WASD / Arrow Keys — Move<br>
-      Z — Attack<br>
-      X — Dodge
+      Left Click — Dodge<br>
+      Right Click — Attack
     </div>
     <div id="chat-container">
       <div id="chat-messages"></div>
