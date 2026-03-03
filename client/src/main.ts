@@ -53,9 +53,11 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
   if (localPlayer) {
     inputHandler.setPosition(localPlayer.x, localPlayer.y);
   }
+  inputHandler.updateObstacles(initialState.obstacles);
 
   client.onGameStateUpdate((state) => {
     renderer.updateState(state);
+    inputHandler.updateObstacles(state.obstacles);
     const count = document.getElementById('player-count');
     if (count) count.textContent = String(Object.keys(state.players).length);
   });

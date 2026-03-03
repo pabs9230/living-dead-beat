@@ -1,34 +1,33 @@
 import { GameClient } from '../network/gameClient';
-import { WORLD_WIDTH, WORLD_HEIGHT, OBSTACLES, Obstacle } from '../../../shared/src/types';
+import { WORLD_WIDTH, WORLD_HEIGHT, Obstacle, ObstacleType } from '../../../shared/src/types';
 
 const MOVE_SPEED = 4;
 const SEND_RATE = 50; // Send position updates every 50ms
 
-// Player hitbox half-dimensions (relative to player world position).
-// PLAYER_HALF_W matches SZ/2 from renderer (SZ=26 → half=13, using 12 for slight inset).
-// PLAYER_TOP covers skull (HEAD_R*2=26) + body (BODY_H/2=16) ≈ 42, rounded to 44.
-const PLAYER_HALF_W = 12;
-const PLAYER_TOP = 44; // how far up the hitbox extends from world position
+// Player collision half-sizes (must match server constants)
+const OBSTACLE_HALF_W: Record<ObstacleType, number> = { tomb: 14, dead_tree: 12, dry_branch: 20 };
+const OBSTACLE_HALF_H: Record<ObstacleType, number> = { tomb: 20, dead_tree: 12, dry_branch: 6 };
+const PLAYER_HALF_W = 14;
+const PLAYER_HALF_H = 20;
 
-function collidesWithObstacle(x: number, y: number, obs: Obstacle): boolean {
+function overlapsObstacle(px: number, py: number, obs: Obstacle): boolean {
+  const hw = OBSTACLE_HALF_W[obs.type];
+  const hh = OBSTACLE_HALF_H[obs.type];
   return (
-    x + PLAYER_HALF_W > obs.x &&
-    x - PLAYER_HALF_W < obs.x + obs.width &&
-    y > obs.y &&
-    y - PLAYER_TOP < obs.y + obs.height
+    px + PLAYER_HALF_W > obs.x - hw &&
+    px - PLAYER_HALF_W < obs.x + hw &&
+    py + PLAYER_HALF_H > obs.y - hh &&
+    py - PLAYER_HALF_H < obs.y + hh
   );
-}
-
-function collidesWithAny(x: number, y: number): boolean {
-  return OBSTACLES.some((obs) => collidesWithObstacle(x, y, obs));
 }
 
 export class InputHandler {
   private keys = new Set<string>();
-  private playerX = 400;
-  private playerY = 300;
+  private playerX = 800;
+  private playerY = 600;
   private client: GameClient;
   private lastSendTime = 0;
+  private obstacles: Obstacle[] = [];
 
   constructor(client: GameClient, canvas: HTMLCanvasElement) {
     this.client = client;
@@ -65,6 +64,10 @@ export class InputHandler {
     this.playerY = y;
   }
 
+  updateObstacles(obstacles: Obstacle[]): void {
+    this.obstacles = obstacles;
+  }
+
   private update(): void {
     let dx = 0;
     let dy = 0;
@@ -78,16 +81,16 @@ export class InputHandler {
       const newX = Math.max(0, Math.min(WORLD_WIDTH, this.playerX + dx));
       const newY = Math.max(0, Math.min(WORLD_HEIGHT, this.playerY + dy));
 
-      if (!collidesWithAny(newX, newY)) {
-        // Full movement is clear
+      const fullBlocked = this.obstacles.some(o => overlapsObstacle(newX, newY, o));
+      if (!fullBlocked) {
         this.playerX = newX;
         this.playerY = newY;
       } else {
-        // Try sliding along each axis independently
-        if (!collidesWithAny(newX, this.playerY)) {
+        // Sliding: try each axis independently
+        if (!this.obstacles.some(o => overlapsObstacle(newX, this.playerY, o))) {
           this.playerX = newX;
         }
-        if (!collidesWithAny(this.playerX, newY)) {
+        if (!this.obstacles.some(o => overlapsObstacle(this.playerX, newY, o))) {
           this.playerY = newY;
         }
       }
