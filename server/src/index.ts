@@ -69,5 +69,5 @@ setInterval(() => {
 }, TICK_INTERVAL);
 
 httpServer.listen(PORT, () => {
-  console.log(`Nocturne server running on port ${PORT}`);
+  console.log(`Living Dead Beat server running on port ${PORT}`);
 });
