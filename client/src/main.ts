@@ -14,7 +14,7 @@ function buildWsUrl(): string {
   if (_env.VITE_WS_URL) return _env.VITE_WS_URL;
   const host = window.location.hostname;
   const customPath = _env.VITE_WS_PATH ?? '';
-  if (window.location.protocol === 'https:') {
+  if (window.location.protocol === 'https') {
     // For HTTPS we assume nginx terminates TLS and proxies a /ws path to the server.
     const path = customPath || '/ws';
     return `https://${host}${path.startsWith('/') ? path : `/${path}`}`;
