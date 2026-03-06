@@ -18,7 +18,9 @@ export class LoginScreen {
     this.nicknameInput.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key === 'Enter') this.handleJoin();
     });
-    this.nicknameInput.focus();
+    // Avoid auto-focusing the nickname input on touch devices (prevents keyboard from popping up)
+    const isTouch = (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) || ('ontouchstart' in window);
+    if (!isTouch) this.nicknameInput.focus();
 
     // start the creeps preview showcase (will no-op if container missing)
     this.showcase = new CreepsShowcase();

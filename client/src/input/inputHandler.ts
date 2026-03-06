@@ -45,11 +45,19 @@ export class InputHandler {
   private obstacles: Obstacle[] = [];
   // optional function to convert canvas coords to world coords
   private screenToWorld?: (cx: number, cy: number) => { x: number; y: number };
-  // local action state (kept for API compatibility; server feeds this but client doesn't use it locally)
+  // Canvas reference + pointer/touch state
+  private canvas: HTMLCanvasElement;
+  private pointerDown = false;
+  private pointerId: number | null = null;
+  private pointerCanvasX = 0;
+  private pointerCanvasY = 0;
+  private pointerDownTime = 0;
+  private pointerMoved = false;
 
   constructor(client: GameClient, canvas: HTMLCanvasElement, screenToWorld?: (cx: number, cy: number) => { x: number; y: number }) {
     this.client = client;
     this.screenToWorld = screenToWorld;
+    this.canvas = canvas;
 
     window.addEventListener('keydown', (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
@@ -61,22 +69,77 @@ export class InputHandler {
       this.keys.delete(e.key);
     });
 
-    // Left click = dodge (dash toward mouse), right click = attack
-    canvas.addEventListener('mousedown', (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      const canvasX = e.clientX - rect.left;
-      const canvasY = e.clientY - rect.top;
-      if (e.button === 0) {
-        if (this.screenToWorld) {
-          const world = this.screenToWorld(canvasX, canvasY);
-          client.sendDodgeTo(Math.round(world.x), Math.round(world.y));
-        } else {
-          client.sendDodge();
+    // Pointer events (touch / pen) — prefer pointer API when available
+    if ((window as any).PointerEvent) {
+      canvas.addEventListener('pointerdown', (e: PointerEvent) => {
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        this.pointerDown = true;
+        this.pointerId = e.pointerId;
+        this.pointerCanvasX = canvasX;
+        this.pointerCanvasY = canvasY;
+        this.pointerDownTime = Date.now();
+        this.pointerMoved = false;
+        try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      });
+
+      canvas.addEventListener('pointermove', (e: PointerEvent) => {
+        if (!this.pointerDown || e.pointerId !== this.pointerId) return;
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        const dx = canvasX - this.pointerCanvasX;
+        const dy = canvasY - this.pointerCanvasY;
+        if (Math.hypot(dx, dy) >= 6) this.pointerMoved = true;
+        this.pointerCanvasX = canvasX;
+        this.pointerCanvasY = canvasY;
+      });
+
+      const handlePointerUp = (e: PointerEvent) => {
+        if (e.pointerId !== this.pointerId) return;
+        try { canvas.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        const duration = Date.now() - this.pointerDownTime;
+        this.pointerDown = false;
+        this.pointerId = null;
+        // If pointer didn't move significantly, treat as tap / long-press
+        if (!this.pointerMoved) {
+          if (duration < 350) {
+            if (this.screenToWorld) {
+              const world = this.screenToWorld(canvasX, canvasY);
+              client.sendDodgeTo(Math.round(world.x), Math.round(world.y));
+            } else {
+              client.sendDodge();
+            }
+          } else {
+            client.sendAttack();
+          }
         }
-      } else if (e.button === 2) {
-        client.sendAttack();
-      }
-    });
+      };
+
+      canvas.addEventListener('pointerup', handlePointerUp);
+      canvas.addEventListener('pointercancel', handlePointerUp);
+    } else {
+      // Fallback for mouse-only environments: left click = dodge, right click = attack
+      canvas.addEventListener('mousedown', (e: MouseEvent) => {
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        if (e.button === 0) {
+          if (this.screenToWorld) {
+            const world = this.screenToWorld(canvasX, canvasY);
+            client.sendDodgeTo(Math.round(world.x), Math.round(world.y));
+          } else {
+            client.sendDodge();
+          }
+        } else if (e.button === 2) {
+          client.sendAttack();
+        }
+      });
+    }
 
     // Prevent context menu on right-click inside canvas
     canvas.addEventListener('contextmenu', (e: Event) => {
@@ -147,6 +210,18 @@ export class InputHandler {
       else if (input === 'right') dx += MOVE_SPEED;
       else if (input === 'up') dy -= MOVE_SPEED;
       else if (input === 'down') dy += MOVE_SPEED;
+    }
+
+    // Pointer drag -> continuous movement toward pointer (touch/pen)
+    if (this.pointerDown && this.pointerMoved && this.screenToWorld) {
+      const world = this.screenToWorld(this.pointerCanvasX, this.pointerCanvasY);
+      const dirX = world.x - this.playerX;
+      const dirY = world.y - this.playerY;
+      const mag = Math.hypot(dirX, dirY);
+      if (mag > 0.5) {
+        dx += (dirX / mag) * MOVE_SPEED;
+        dy += (dirY / mag) * MOVE_SPEED;
+      }
     }
 
     // Player movement should never be blocked by unhandled inputs or continuous dodges (requirement #4)

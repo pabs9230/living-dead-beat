@@ -34,6 +34,7 @@ export class GameRenderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private localPlayerId: string;
+  private dpr = 1;
   private interpolated: Map<string, InterpolatedPlayer> = new Map();
   private lastTime = 0;
   private time = 0;
@@ -58,6 +59,15 @@ export class GameRenderer {
     void scenarioName;
     // default cursor for the game canvas
     this.canvas.style.cursor = 'crosshair';
+    // Setup devicePixelRatio scaling so drawing uses CSS pixels while backing store
+    // is in physical pixels for crisp rendering on high-DPI screens.
+    this.dpr = Math.max(1, window.devicePixelRatio || 1);
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    // Reduce particle load on touch devices for better mobile performance
+    const isTouchDevice = (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) || ('ontouchstart' in window) || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    if (isTouchDevice) {
+      this.PARTICLE_COUNT = 200;
+    }
     this.createParticleSprites();
     this.initParticles();
   }
@@ -322,7 +332,8 @@ export class GameRenderer {
   }
 
   private getCamera(): { x: number; y: number } {
-    const { width, height } = this.canvas;
+    const width = Math.round(this.canvas.width / this.dpr);
+    const height = Math.round(this.canvas.height / this.dpr);
     if (this.centerScene) {
       const cx = WORLD_WIDTH / 2 - width / 2;
       const cy = WORLD_HEIGHT / 2 - height / 2;
@@ -353,7 +364,8 @@ export class GameRenderer {
     const dt = timestamp - this.lastTime;
     this.lastTime = timestamp;
 
-    const { width, height } = this.canvas;
+    const width = Math.round(this.canvas.width / this.dpr);
+    const height = Math.round(this.canvas.height / this.dpr);
     const ctx = this.ctx;
 
     // Smooth-interpolate all players first (needed for camera)

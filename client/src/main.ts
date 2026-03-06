@@ -63,6 +63,8 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
   const gameScreen = document.getElementById('game-screen') as HTMLDivElement;
   const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
   gameScreen.style.display = 'flex';
+  // Prevent default touch gestures (pinch/scroll) on the game canvas
+  canvas.style.touchAction = 'none';
 
   // Responsive canvas sizing: keep the canvas centered and not full-bleed.
   // The canvas logical resolution is clamped to the world size and a small
@@ -79,8 +81,9 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
       targetW = Math.round(targetH * worldAspect);
     }
     // Set canvas logical resolution and CSS size so it is visually centered
-    canvas.width = targetW;
-    canvas.height = targetH;
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.round(targetW * dpr);
+    canvas.height = Math.round(targetH * dpr);
     canvas.style.width = `${targetW}px`;
     canvas.style.height = `${targetH}px`;
   }
@@ -151,6 +154,41 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
       // stop propagation so game input doesn't react while typing
       e.stopPropagation();
     }
+  });
+
+  // Adjust chat container when on-screen keyboard / visualViewport changes (mobile)
+  const chatContainerEl = document.getElementById('chat-container') as HTMLElement | null;
+  const visualViewport = (window as any).visualViewport;
+  function adjustChatForViewport() {
+    if (!chatContainerEl) return;
+    const vv = (window as any).visualViewport;
+    if (!vv) {
+      chatContainerEl.style.bottom = '';
+      return;
+    }
+    // Keyboard height approximated by difference between layout viewport and visualViewport
+    const kbHeight = Math.max(0, window.innerHeight - vv.height);
+    const baseBottom = 20; // match CSS fallback
+    chatContainerEl.style.bottom = `${kbHeight + baseBottom}px`;
+  }
+
+  chatInput.addEventListener('focus', () => {
+    if (visualViewport) {
+      adjustChatForViewport();
+      visualViewport.addEventListener('resize', adjustChatForViewport);
+      visualViewport.addEventListener('scroll', adjustChatForViewport);
+    } else {
+      // fallback: ensure chat is visible
+      chatContainerEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+
+  chatInput.addEventListener('blur', () => {
+    if (visualViewport) {
+      visualViewport.removeEventListener('resize', adjustChatForViewport);
+      visualViewport.removeEventListener('scroll', adjustChatForViewport);
+    }
+    if (chatContainerEl) chatContainerEl.style.bottom = '';
   });
 
   window.addEventListener('resize', () => {
