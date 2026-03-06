@@ -40,8 +40,6 @@ export class GameRenderer {
   private obstacles: Obstacle[] = [];
   private static DESIGNS = ['ghost','bat','cat','vampire','zombie','medusa','sphynx'];
   private centerScene = true; // when true, camera centers on world center instead of local player
-
-  private scenarioName: string;
   // transient chat bubbles keyed by playerId
   private chatBubbles: Map<string, { text: string; start: number; duration: number; lines?: string[] }> = new Map();
   // ambient particles
@@ -57,7 +55,7 @@ export class GameRenderer {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.localPlayerId = localPlayerId;
-    this.scenarioName = scenarioName;
+    void scenarioName;
     // default cursor for the game canvas
     this.canvas.style.cursor = 'crosshair';
     this.createParticleSprites();
@@ -523,22 +521,7 @@ export class GameRenderer {
     ctx.beginPath(); ctx.fillStyle = 'rgba(230,230,255,0.85)'; ctx.arc(moonX + 60, moonY - 40, 12, 0, Math.PI * 2); ctx.fill();
   }
 
-  private drawGrid(
-    ctx: CanvasRenderingContext2D,
-    camX: number, camY: number, vw: number, vh: number
-  ): void {
-    ctx.strokeStyle = 'rgba(80,10,10,0.12)';
-    ctx.lineWidth = 1;
-    const gridSize = 60;
-    const startX = Math.floor(camX / gridSize) * gridSize;
-    const startY = Math.floor(camY / gridSize) * gridSize;
-    for (let x = startX; x < camX + vw; x += gridSize) {
-      ctx.beginPath(); ctx.moveTo(x, camY); ctx.lineTo(x, camY + vh); ctx.stroke();
-    }
-    for (let y = startY; y < camY + vh; y += gridSize) {
-      ctx.beginPath(); ctx.moveTo(camX, y); ctx.lineTo(camX + vw, y); ctx.stroke();
-    }
-  }
+  // (grid helper removed — unused in runtime)
 
   private drawObstacle(ctx: CanvasRenderingContext2D, obs: Obstacle): void {
     const { x, y, type } = obs;

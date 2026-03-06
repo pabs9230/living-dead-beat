@@ -1,5 +1,6 @@
 // Shared sprite draw helpers used by both the in-game renderer and the UI previews
 export function drawGhost(ctx: CanvasRenderingContext2D, bob: number, colors: {body:string,outline:string}, time: number, isLocal = false, variant = 0) {
+  void colors; void time; void variant;
   ctx.save();
   ctx.translate(0, bob);
 
@@ -31,6 +32,7 @@ export function drawGhost(ctx: CanvasRenderingContext2D, bob: number, colors: {b
 }
 
 export function drawBat(ctx: CanvasRenderingContext2D, bob: number, colors: {body:string,outline:string}, time: number, isLocal = false, variant = 0) {
+  void isLocal;
   ctx.save();
   ctx.translate(0, bob);
   // Body
@@ -173,6 +175,7 @@ export function drawCat(ctx: CanvasRenderingContext2D, bob: number, colors: {bod
 }
 
 export function drawVampire(ctx: CanvasRenderingContext2D, bob: number, colors: {body:string,outline:string}, time: number, isLocal = false, variant = 0) {
+  void time; void isLocal; void variant;
   ctx.save(); ctx.translate(0, bob);
   // Cloak
   ctx.fillStyle = colors.body; ctx.strokeStyle = colors.outline; ctx.beginPath(); ctx.moveTo(-14, 8); ctx.lineTo(0, -10); ctx.lineTo(14, 8); ctx.closePath(); ctx.fill(); ctx.stroke();
@@ -186,6 +189,7 @@ export function drawVampire(ctx: CanvasRenderingContext2D, bob: number, colors: 
 }
 
 export function drawZombie(ctx: CanvasRenderingContext2D, bob: number, colors: {body:string,outline:string}, time: number, isLocal = false, variant = 0) {
+  void isLocal;
   ctx.save();
   // Add a subtle shaking effect to zombie characters to convey instability
   const shakeX = Math.sin((time || 0) * 0.02 + (bob * 0.3)) * 1.8;
@@ -375,6 +379,7 @@ export function drawMedusa(ctx: CanvasRenderingContext2D, bob: number, colors: {
 }
 
 export function drawSphynx(ctx: CanvasRenderingContext2D, bob: number, colors: {body:string,outline:string}, time: number, isLocal = false, variant = 0) {
+  void time; void variant;
   ctx.save();
   ctx.translate(0, bob);
   ctx.fillStyle = colors.body;

@@ -1,5 +1,5 @@
 import { GameClient } from '../network/gameClient';
-import { WORLD_WIDTH, WORLD_HEIGHT, Obstacle, ObstacleType, ExtendedObstacleType } from '../../../shared/src/types';
+import { WORLD_WIDTH, WORLD_HEIGHT, Obstacle, ExtendedObstacleType } from '../../../shared/src/types';
 
 const MOVE_SPEED = 4;
 const SEND_RATE = 50; // Send position updates every 50ms
@@ -45,8 +45,7 @@ export class InputHandler {
   private obstacles: Obstacle[] = [];
   // optional function to convert canvas coords to world coords
   private screenToWorld?: (cx: number, cy: number) => { x: number; y: number };
-  // local action state (used to suppress movement while dashing)
-  private localAction: string = 'idle';
+  // local action state (kept for API compatibility; server feeds this but client doesn't use it locally)
 
   constructor(client: GameClient, canvas: HTMLCanvasElement, screenToWorld?: (cx: number, cy: number) => { x: number; y: number }) {
     this.client = client;
@@ -99,7 +98,9 @@ export class InputHandler {
   // Called by the main loop when server state updates arrive so we know
   // whether the local player is currently dashing (server authoritative)
   setLocalAction(action: string): void {
-    this.localAction = action;
+    // no-op: we keep this handler so callers can inform us of the server-side action,
+    // but local movement isn't blocked by it in this client implementation.
+    void action;
   }
 
   private update(): void {
