@@ -5,10 +5,26 @@ import { InputHandler } from './input/inputHandler';
 import { GameState, WORLD_WIDTH, WORLD_HEIGHT } from '../../shared/src/types';
 
 // Read Vite environment variables when provided. Vite exposes variables prefixed
-// with `VITE_` through `import.meta.env`. Use a full `VITE_WS_URL` if supplied,
-// else fall back to `ws://<host>:<VITE_WS_PORT||4041>`.
+// with `VITE_` through `import.meta.env`. Priority:
+// 1) `VITE_WS_URL` — full websocket URL (e.g. wss://game.mawgrim.com/ws)
+// 2) If page loaded over HTTPS -> default to `wss://<host>/ws` (proxied by nginx)
+// 3) If page loaded over HTTP -> default to `ws://<host>:<VITE_WS_PORT||4041>`
 const _env = (import.meta as any)?.env ?? {};
-const WS_URL = _env.VITE_WS_URL ?? `ws://${window.location.hostname}:${_env.VITE_WS_PORT ?? 4041}`;
+function buildWsUrl(): string {
+  if (_env.VITE_WS_URL) return _env.VITE_WS_URL;
+  const host = window.location.hostname;
+  const customPath = _env.VITE_WS_PATH ?? '';
+  if (window.location.protocol === 'https:') {
+    // For HTTPS we assume nginx terminates TLS and proxies a /ws path to the server.
+    const path = customPath || '/ws';
+    return `wss://${host}${path.startsWith('/') ? path : `/${path}`}`;
+  }
+  // HTTP fallback uses ws:// with an explicit port (useful for local dev)
+  const port = _env.VITE_WS_PORT ?? 4041;
+  const pathPart = customPath ? (customPath.startsWith('/') ? customPath : `/${customPath}`) : '';
+  return `ws://${host}:${port}${pathPart}`;
+}
+const WS_URL = buildWsUrl();
 
 function main(): void {
   const loginScreen = new LoginScreen();
