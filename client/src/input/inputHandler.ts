@@ -45,8 +45,6 @@ export class InputHandler {
   private obstacles: Obstacle[] = [];
   // optional function to convert canvas coords to world coords
   private screenToWorld?: (cx: number, cy: number) => { x: number; y: number };
-  // Canvas reference + pointer/touch state
-  private canvas: HTMLCanvasElement;
   private pointerDown = false;
   private pointerId: number | null = null;
   private pointerCanvasX = 0;
@@ -57,7 +55,6 @@ export class InputHandler {
   constructor(client: GameClient, canvas: HTMLCanvasElement, screenToWorld?: (cx: number, cy: number) => { x: number; y: number }) {
     this.client = client;
     this.screenToWorld = screenToWorld;
-    this.canvas = canvas;
 
     window.addEventListener('keydown', (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
