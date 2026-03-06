@@ -1,10 +1,12 @@
+import 'dotenv/config';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
 import { v4 as uuidv4 } from 'uuid';
 import { GameStateManager } from './gameState';
 import { handleClientMessage } from './messageHandler';
 
-const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
+const PORT = process.env.WS_PORT ? parseInt(process.env.WS_PORT) : 4041;
+const HOST = process.env.WS_HOST || '0.0.0.0';
 const TICK_RATE = 20; // 20 FPS
 const TICK_INTERVAL = 1000 / TICK_RATE;
 const MAX_PLAYERS = 10;
@@ -68,6 +70,6 @@ setInterval(() => {
   }
 }, TICK_INTERVAL);
 
-httpServer.listen(PORT, () => {
-  console.log(`Living Dead Beat server running on port ${PORT}`);
+httpServer.listen(PORT, HOST, () => {
+  console.log(`Living Dead Beat server running on ${HOST}:${PORT}`);
 });

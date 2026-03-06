@@ -4,12 +4,19 @@ export const WORLD_WIDTH = 1600;
 export const WORLD_HEIGHT = 1200;
 
 export type ObstacleType = 'tomb' | 'dead_tree' | 'dry_branch';
+// Add 'lake' as a new obstacle type for scenario features
+export type ExtendedObstacleType = ObstacleType | 'lake' | 'bush';
 
 export interface Obstacle {
   id: number;
-  type: ObstacleType;
+  type: ExtendedObstacleType;
   x: number;
   y: number;
+  // optional size for elliptical obstacles (like lakes)
+  rx?: number;
+  ry?: number;
+  // optional shape hint: 'ellipse' | 'irregular'
+  shape?: string;
 }
 
 export interface Player {
@@ -19,6 +26,10 @@ export interface Player {
   y: number;
   action: PlayerAction;
   spriteVariant: number; // 0-3 for different sprite variations
+  // Character design assigned by server (one of: 'ghost','bat','cat','vampire','zombie','medusa','sphynx')
+  design?: string;
+  // Index into client palette (SPRITE_COLORS)
+  colorIdx?: number;
   lastActionTime: number;
 }
 
@@ -46,6 +57,9 @@ export interface PlayerAttackEvent {
 
 export interface PlayerDodgeEvent {
   type: 'player_dodge';
+  // Optional target world coordinates for a dash towards the mouse
+  x?: number;
+  y?: number;
 }
 
 export interface ChatMessageEvent {

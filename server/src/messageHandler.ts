@@ -28,13 +28,19 @@ export function handleClientMessage(
       // Check if player already joined
       if (gameState.getPlayer(playerId)) return;
 
+      // Assign a random sprite variant, design and color index server-side
+      const DESIGNS = ['ghost','bat','cat','vampire','zombie','medusa','sphynx'];
+      // Choose a safe spawn position from game state (avoids obstacles/players)
+      const spawn = gameState.findSpawnPosition();
       const player = {
         id: playerId,
         nickname,
-        x: Math.floor(Math.random() * 1400) + 100,
-        y: Math.floor(Math.random() * 1000) + 100,
+        x: spawn.x,
+        y: spawn.y,
         action: 'idle' as const,
         spriteVariant: Math.floor(Math.random() * NUM_SPRITE_VARIANTS),
+        design: DESIGNS[Math.floor(Math.random() * DESIGNS.length)],
+        colorIdx: Math.floor(Math.random() * 4),
         lastActionTime: 0,
       };
 
@@ -69,7 +75,10 @@ export function handleClientMessage(
         broadcast({ type: 'game_state_update', state: gameState.getState() });
         setTimeout(() => {
           const p = gameState.getPlayer(playerId);
-          if (p) p.action = 'idle';
+          if (p) {
+            p.action = 'idle';
+            broadcast({ type: 'game_state_update', state: gameState.getState() });
+          }
         }, ACTION_ANIMATION_DURATION_MS);
       }
       break;
@@ -78,15 +87,36 @@ export function handleClientMessage(
     case 'player_dodge': {
       const player = gameState.getPlayer(playerId);
       if (!player) return;
-      const success = gameState.setPlayerAction(playerId, 'dodge');
-      if (success) {
+      // Enforce cooldown via setPlayerAction
+      const allowed = gameState.setPlayerAction(playerId, 'dodge');
+      if (!allowed) return;
+
+      // Attempt dash toward provided coordinates (if any)
+      const tx = (message as any).x;
+      const ty = (message as any).y;
+      const dashed = typeof tx === 'number' && typeof ty === 'number'
+        ? gameState.dashPlayer(playerId, tx, ty)
+        : false;
+
+      if (!dashed) {
+        // Dash couldn't move the player (e.g. blocked) — clear dodge immediately
+        const p = gameState.getPlayer(playerId);
+        if (p) p.action = 'idle';
         broadcast({ type: 'game_state_update', state: gameState.getState() });
-        // Reset to idle after animation duration
-        setTimeout(() => {
-          const p = gameState.getPlayer(playerId);
-          if (p) p.action = 'idle';
-        }, ACTION_ANIMATION_DURATION_MS);
+        break;
       }
+
+      // Broadcast updated state so clients see the action and new position
+      broadcast({ type: 'game_state_update', state: gameState.getState() });
+
+      // Reset to idle after animation duration
+      setTimeout(() => {
+        const p = gameState.getPlayer(playerId);
+        if (p) {
+          p.action = 'idle';
+          broadcast({ type: 'game_state_update', state: gameState.getState() });
+        }
+      }, ACTION_ANIMATION_DURATION_MS);
       break;
     }
 

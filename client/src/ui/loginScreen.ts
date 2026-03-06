@@ -1,9 +1,12 @@
+import { CreepsShowcase } from './creepsShowcase';
+
 export class LoginScreen {
   private screen: HTMLDivElement;
   private nicknameInput: HTMLInputElement;
   private joinBtn: HTMLButtonElement;
   private errorMsg: HTMLDivElement;
   private joinCb?: (nickname: string) => void;
+  private showcase?: CreepsShowcase;
 
   constructor() {
     this.screen = document.getElementById('login-screen') as HTMLDivElement;
@@ -16,6 +19,9 @@ export class LoginScreen {
       if (e.key === 'Enter') this.handleJoin();
     });
     this.nicknameInput.focus();
+
+    // start the creeps preview showcase (will no-op if container missing)
+    this.showcase = new CreepsShowcase();
   }
 
   private handleJoin(): void {
@@ -41,6 +47,8 @@ export class LoginScreen {
   }
 
   hide(): void {
+    // stop preview animation and hide the screen
+    this.showcase?.stop();
     this.screen.style.display = 'none';
   }
 }

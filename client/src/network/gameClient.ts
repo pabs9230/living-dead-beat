@@ -67,7 +67,12 @@ export class GameClient {
   }
 
   sendDodge(): void {
+    // Default dodge without direction
     this.send({ type: 'player_dodge' });
+  }
+
+  sendDodgeTo(x: number, y: number): void {
+    this.send({ type: 'player_dodge', x, y });
   }
 
   sendChat(text: string): void {
