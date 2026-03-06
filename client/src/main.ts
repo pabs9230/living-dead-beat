@@ -17,7 +17,7 @@ function buildWsUrl(): string {
   if (window.location.protocol === 'https:') {
     // For HTTPS we assume nginx terminates TLS and proxies a /ws path to the server.
     const path = customPath || '/ws';
-    return `wss://${host}${path.startsWith('/') ? path : `/${path}`}`;
+    return `https://${host}${path.startsWith('/') ? path : `/${path}`}`;
   }
   // HTTP fallback uses ws:// with an explicit port (useful for local dev)
   const port = _env.VITE_WS_PORT ?? 4041;
