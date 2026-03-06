@@ -11,10 +11,12 @@ import { GameState, WORLD_WIDTH, WORLD_HEIGHT } from '../../shared/src/types';
 // 3) If page loaded over HTTP -> default to `ws://<host>:<VITE_WS_PORT||4041>`
 const _env = (import.meta as any)?.env ?? {};
 function buildWsUrl(): string {
+  console.log('Client environment variables:', _env);
   if (_env.VITE_WS_URL) return _env.VITE_WS_URL;
   const host = window.location.hostname;
   const customPath = _env.VITE_WS_PATH ?? '';
-  if (window.location.protocol === 'https') {
+  if (window.location.protocol === 'https:') {
+    console.warn('Page loaded over HTTPS, defaulting to secure WebSocket connection. If the server is not configured for this, set VITE_WS_URL explicitly to a ws:// URL.');
     // For HTTPS we assume nginx terminates TLS and proxies a /ws path to the server.
     const path = customPath || '/ws';
     return `https://${host}${path.startsWith('/') ? path : `/${path}`}`;
