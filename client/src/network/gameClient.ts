@@ -1,4 +1,4 @@
-import { ServerToClientEvent, ClientToServerEvent, GameState } from '../../../shared/src/types';
+import { ServerToClientEvent, ClientToServerEvent, GameState, CreepDesign, AbilitySlot } from '../../../shared/src/types';
 
 type ConnectedCallback = () => void;
 type JoinSuccessCallback = (playerId: string, state: GameState) => void;
@@ -54,16 +54,16 @@ export class GameClient {
     }
   }
 
-  join(nickname: string): void {
-    this.send({ type: 'player_join', nickname });
+  join(nickname: string, creepDesign?: CreepDesign): void {
+    this.send({ type: 'player_join', nickname, creepDesign });
   }
 
   sendMove(x: number, y: number): void {
     this.send({ type: 'player_move', x, y });
   }
 
-  sendAttack(): void {
-    this.send({ type: 'player_attack' });
+  sendAttack(x?: number, y?: number): void {
+    this.send({ type: 'player_attack', x, y });
   }
 
   sendDodge(): void {
@@ -77,6 +77,14 @@ export class GameClient {
 
   sendChat(text: string): void {
     this.send({ type: 'chat_message', text });
+  }
+
+  sendAbilityCast(slot: AbilitySlot, x?: number, y?: number): void {
+    this.send({ type: 'ability_cast', slot, x, y });
+  }
+
+  sendAbilityHold(slot: AbilitySlot, isHolding: boolean, x?: number, y?: number): void {
+    this.send({ type: 'ability_hold', slot, isHolding, x, y });
   }
 
   disconnect(): void {

@@ -21,8 +21,10 @@ type Preview = {
 
 export class CreepsShowcase {
   private previews: Preview[] = [];
+  private selectedDesign = 'ghost';
   private raf?: number;
   private resizeListener?: () => void;
+  private selectCb?: (design: string) => void;
 
   constructor(containerId = 'creeps-showcase') {
     const container = document.getElementById(containerId);
@@ -35,6 +37,9 @@ export class CreepsShowcase {
       const d = designs[i];
       const wrapper = document.createElement('div');
       wrapper.className = 'creep';
+      wrapper.tabIndex = 0;
+      wrapper.setAttribute('role', 'button');
+      wrapper.setAttribute('aria-label', `Select ${displayNames[d]} creep`);
 
       const canvas = document.createElement('canvas');
       // desired CSS display size for the preview
@@ -59,6 +64,19 @@ export class CreepsShowcase {
       // scale drawing so 1 unit == 1 CSS pixel (avoid manual scaling in draw routines)
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       this.previews.push({ canvas, ctx, design: d, name: displayNames[d], colorIdx: i % SPRITE_COLORS.length, displayW: displaySize, displayH: displaySize, dpr, wrapper });
+
+      const select = () => {
+        this.setSelectedDesign(d);
+        this.selectCb?.(d);
+      };
+
+      wrapper.addEventListener('click', select);
+      wrapper.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          select();
+        }
+      });
     }
 
     // initial responsive sizing and attach resize listener
@@ -75,26 +93,50 @@ export class CreepsShowcase {
     if (this.resizeListener) window.removeEventListener('resize', this.resizeListener);
   }
 
-  private computeDisplaySize(containerW: number, count: number) {
-    const gap = 12; // matches CSS gap
-    const totalGap = Math.max(0, (count - 1) * gap);
-    const available = Math.max(96, containerW - totalGap - 24); // reserve some padding
-    const per = Math.floor(available / Math.max(1, count));
-    const minSize = 96;
+  private computeDisplaySize(containerW: number, containerH: number, count: number) {
+    const gap = Math.max(4, Math.min(10, Math.round(window.innerHeight * 0.01)));
     const maxSize = 200;
-    return Math.max(minSize, Math.min(maxSize, per));
+    const minSize = window.innerHeight < 520 ? 46 : 54;
+    const labelHeight = window.innerHeight < 560 ? 14 : 18;
+
+    let bestSize = minSize;
+    let bestCols = count;
+
+    // Evaluate all column counts and keep the biggest sprite size that fits both axes.
+    for (let columns = 1; columns <= count; columns++) {
+      const rows = Math.ceil(count / columns);
+      const widthBudget = Math.max(0, containerW - Math.max(0, (columns - 1) * gap) - 8);
+      const heightBudget = Math.max(0, containerH - Math.max(0, (rows - 1) * gap) - rows * labelHeight - 6);
+      const sizeByWidth = Math.floor(widthBudget / columns);
+      const sizeByHeight = Math.floor(heightBudget / rows);
+      const size = Math.min(maxSize, sizeByWidth, sizeByHeight);
+      if (size >= bestSize) {
+        bestSize = size;
+        bestCols = columns;
+      }
+    }
+
+    return {
+      size: Math.max(minSize, Math.min(maxSize, bestSize)),
+      columns: bestCols,
+      gap,
+    };
   }
 
   private updateSizes() {
     const container = document.getElementById('creeps-showcase');
     if (!container || this.previews.length === 0) return;
     const rect = container.getBoundingClientRect();
-    const displaySize = this.computeDisplaySize(rect.width, this.previews.length);
+    const metrics = this.computeDisplaySize(rect.width, rect.height, this.previews.length);
+    const displaySize = metrics.size;
+
+    container.style.gap = `${metrics.gap}px`;
 
     for (const p of this.previews) {
       p.displayW = displaySize;
       p.displayH = displaySize;
       p.wrapper.style.width = `${displaySize}px`;
+      p.wrapper.style.flexBasis = `${displaySize}px`;
       p.canvas.style.width = `${displaySize}px`;
       p.canvas.style.height = `${displaySize}px`;
       const dpi = p.dpr;
@@ -151,6 +193,20 @@ export class CreepsShowcase {
     }
 
     ctx.restore();
+
+    if (p.design === this.selectedDesign) {
+      p.wrapper.classList.add('selected');
+    } else {
+      p.wrapper.classList.remove('selected');
+    }
+  }
+
+  setSelectedDesign(design: string): void {
+    this.selectedDesign = design;
+  }
+
+  onSelect(cb: (design: string) => void): void {
+    this.selectCb = cb;
   }
 
 }

@@ -23,15 +23,17 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 18px;
-      width: min(92vw, 820px);
-      padding: 26px;
+      justify-content: flex-start;
+      gap: clamp(6px, 1.4vh, 16px);
+      width: min(96vw, 980px);
+      height: min(96dvh, 920px);
+      padding: clamp(10px, 2.2vh, 26px);
       border-radius: 12px;
       background: linear-gradient(180deg, rgba(20,0,0,0.62), rgba(10,0,0,0.8));
       border: 2px solid rgba(180,0,20,0.18);
       box-shadow: 0 8px 40px rgba(0,0,0,0.8), 0 0 36px rgba(220,20,40,0.06) inset;
       position: relative;
-      overflow: visible;
+      overflow: hidden;
     }
     #login-screen::after {
       content: "";
@@ -45,26 +47,96 @@
       mix-blend-mode: screen;
     }
     #login-screen h1 {
-      font-size: 3rem;
+      font-size: clamp(1.25rem, 5.2vw, 3rem);
       color: #ff0f2f;
-      letter-spacing: 6px;
+      letter-spacing: clamp(1px, 0.65vw, 6px);
       text-shadow: 0 0 18px #660010, 0 0 40px rgba(255,0,70,0.18);
-      margin-bottom: 6px;
+      margin-bottom: 0;
+      line-height: 1.05;
+      text-align: center;
     }
-    #login-screen p { color: #ffa3b3; font-size: 0.95rem; margin-bottom: 6px; }
+    #login-screen p {
+      color: #ffa3b3;
+      font-size: clamp(0.72rem, 1.75vh, 0.95rem);
+      margin-bottom: 0;
+      text-align: center;
+      line-height: 1.2;
+    }
 
     /* Creeps Showcase */
-    #creeps-showcase { display:flex; gap:12px; align-items:center; justify-content:center; width:100%; }
-    .creep { text-align:center; flex: 0 0 auto; }
+    #creeps-showcase {
+      display: flex;
+      flex-wrap: wrap;
+      gap: clamp(4px, 0.95vh, 10px);
+      align-items: flex-start;
+      align-content: center;
+      justify-content: center;
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: hidden;
+      padding: 2px 0;
+    }
+    .creep {
+      text-align:center;
+      flex: 0 0 auto;
+      cursor: pointer;
+      user-select: none;
+      border-radius: 10px;
+      transition: transform 0.15s ease, filter 0.15s ease;
+    }
+    .creep:hover { transform: translateY(-2px); filter: brightness(1.05); }
+    .creep:focus-visible { outline: 2px solid rgba(255,120,170,0.7); outline-offset: 2px; }
+    .creep.selected .creep-canvas { border-color: rgba(255,120,170,0.85); box-shadow: 0 0 0 2px rgba(255,80,140,0.2), 0 10px 24px rgba(0,0,0,0.65); }
+    .creep.selected .label { color: #ffd0e6; }
     .creep-canvas { background:linear-gradient(180deg, rgba(40,0,0,0.4), rgba(0,0,0,0.6)); border-radius:8px; border:1px solid rgba(255,20,60,0.08); display:block; margin:0 auto; box-shadow: 0 6px 18px rgba(0,0,0,0.6); }
-    .creep .label { margin-top:8px; font-weight:bold; color:#ff6eb4; font-size:0.85rem; text-transform:uppercase; letter-spacing:1px; }
+    .creep .label {
+      margin-top: clamp(2px, 0.45vh, 8px);
+      font-weight:bold;
+      color:#ff6eb4;
+      font-size: clamp(0.6rem, 1.25vh, 0.85rem);
+      text-transform:uppercase;
+      letter-spacing: 0.8px;
+      line-height: 1.1;
+    }
+
+    #creep-controls { display: flex; gap: 10px; align-items: stretch; justify-content: center; flex-wrap: wrap; width: 100%; }
+    #selected-creep-wrap { color: #ffd0e6; font-size: clamp(0.65rem, 1.35vh, 0.85rem); letter-spacing: 1px; text-transform: uppercase; }
+    #selected-creep { color: #ff7fb8; font-weight: bold; }
+    #creep-stats-summary {
+      min-width: min(220px, 86vw);
+      padding: clamp(5px, 0.9vh, 10px) clamp(8px, 1.2vw, 12px);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 120, 170, 0.24);
+      background: linear-gradient(180deg, rgba(36, 6, 16, 0.65), rgba(10, 0, 6, 0.72));
+      color: #ffd8e9;
+      display: grid;
+      gap: clamp(2px, 0.45vh, 5px);
+      font-size: clamp(0.62rem, 1.25vh, 0.82rem);
+    }
+    #creep-stats-summary .title {
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #ff9bc3;
+      font-weight: bold;
+      margin-bottom: 2px;
+    }
+    .creep-stat-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      border-top: 1px solid rgba(255, 120, 170, 0.12);
+      padding-top: 4px;
+    }
+    .creep-stat-row span { color: #f4bcd7; }
+    .creep-stat-row strong { color: #ffdff0; }
 
     #nickname-input {
       background: rgba(10,0,0,0.6);
       border: 2px solid rgba(140,0,16,0.9);
       color: #ffeaea;
-      padding: 12px 20px;
-      font-size: 1.05rem;
+      padding: clamp(8px, 1.1vh, 12px) clamp(12px, 1.9vw, 20px);
+      font-size: clamp(0.75rem, 1.6vh, 1.05rem);
       border-radius: 6px;
       width: min(92vw, 320px);
       text-align: center;
@@ -73,7 +145,7 @@
     }
     #nickname-input:focus { border-color: #ff4b6a; box-shadow: 0 0 12px rgba(255,80,110,0.12); }
 
-    #join-btn { background: linear-gradient(180deg,#cc0038,#8f001a); color:#fff; border:none; padding:12px 36px; font-size:1rem; border-radius:6px; cursor:pointer; letter-spacing:2px; box-shadow: 0 10px 30px rgba(160,0,30,0.18); }
+    #join-btn { background: linear-gradient(180deg,#cc0038,#8f001a); color:#fff; border:none; padding: clamp(8px, 1.1vh, 12px) clamp(18px, 4vw, 36px); font-size: clamp(0.76rem, 1.55vh, 1rem); border-radius:6px; cursor:pointer; letter-spacing:2px; box-shadow: 0 10px 30px rgba(160,0,30,0.18); }
     #join-btn:hover { transform: translateY(-1px); box-shadow: 0 14px 36px rgba(200,0,50,0.22); }
     #join-btn:disabled { background: #42000a; cursor:not-allowed; box-shadow:none; }
 
@@ -225,6 +297,85 @@
       color: #ff6eb4;
     }
 
+    #stats-hud {
+      position: absolute;
+      top: 56px;
+      right: 20px;
+      background: rgba(8, 14, 5, 0.84);
+      border: 1px solid #9d3560;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 0.76rem;
+      color: #f4c8da;
+      min-width: 180px;
+      line-height: 1.45;
+    }
+    #stats-hud .title {
+      font-size: 0.72rem;
+      color: #ff8fbd;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+
+    #ability-hud {
+      position: absolute;
+      left: 50%;
+      bottom: 14px;
+      transform: translateX(-50%);
+      display: grid;
+      grid-template-columns: repeat(4, minmax(84px, 96px));
+      gap: 8px;
+      z-index: 24;
+      pointer-events: none;
+    }
+    .ability-slot {
+      position: relative;
+      border: 1px solid rgba(255, 160, 202, 0.35);
+      border-radius: 8px;
+      min-height: 66px;
+      background: linear-gradient(180deg, rgba(40, 7, 22, 0.86), rgba(12, 3, 8, 0.92));
+      overflow: hidden;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.4), 0 6px 14px rgba(0,0,0,0.36);
+    }
+    .ability-slot .slot-fill {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 0%;
+      background: linear-gradient(180deg, rgba(224, 56, 106, 0.28), rgba(120, 18, 56, 0.65));
+      transition: height 0.12s linear;
+    }
+    .ability-slot .slot-content {
+      position: relative;
+      padding: 5px 6px;
+      display: grid;
+      gap: 2px;
+    }
+    .ability-slot .slot-key {
+      font-size: 0.62rem;
+      color: #ffc7de;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
+    .ability-slot .slot-name {
+      font-size: 0.72rem;
+      color: #ffe4f0;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+    .ability-slot .slot-state {
+      font-size: 0.68rem;
+      color: #8df1ad;
+      font-weight: bold;
+      min-height: 14px;
+    }
+    .ability-slot.cooling .slot-state { color: #ffb2cb; }
+    .ability-slot.casting .slot-state { color: #ffe486; }
+    .ability-slot.ready .slot-state { color: #8df1ad; }
+
     /* Controls hint */
     #controls-hint {
       position: absolute;
@@ -238,12 +389,278 @@
       color: #7fff7a;
       line-height: 1.6;
     }
+
+    #touch-controls {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 20;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .touch-zone {
+      position: absolute;
+      bottom: max(14px, env(safe-area-inset-bottom));
+      width: min(42vw, 220px);
+      height: min(42vw, 220px);
+      pointer-events: none;
+    }
+    .touch-zone-left {
+      left: max(10px, env(safe-area-inset-left));
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-start;
+    }
+    .touch-zone-right {
+      right: max(10px, env(safe-area-inset-right));
+      display: grid;
+      grid-template-columns: repeat(2, minmax(56px, 72px));
+      grid-template-rows: repeat(2, minmax(56px, 72px));
+      gap: 10px;
+      align-content: end;
+      justify-content: end;
+      pointer-events: auto;
+    }
+    .touch-joystick {
+      width: min(34vw, 152px);
+      height: min(34vw, 152px);
+      border-radius: 50%;
+      border: 2px solid rgba(250, 190, 212, 0.35);
+      background:
+        radial-gradient(circle at 35% 35%, rgba(255, 214, 231, 0.22), rgba(120, 24, 62, 0.2) 48%, rgba(20, 4, 10, 0.52) 100%);
+      box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.45), 0 8px 20px rgba(0, 0, 0, 0.4);
+      position: relative;
+      pointer-events: auto;
+      touch-action: none;
+    }
+    .touch-stick {
+      width: min(16vw, 68px);
+      height: min(16vw, 68px);
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.3), rgba(253, 131, 180, 0.78) 55%, rgba(122, 14, 56, 0.92));
+      border: 1px solid rgba(255, 216, 230, 0.6);
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(0px, 0px);
+      margin-left: calc(min(16vw, 68px) / -2);
+      margin-top: calc(min(16vw, 68px) / -2);
+      box-shadow: 0 5px 14px rgba(0, 0, 0, 0.5);
+      transition: transform 0.03s linear;
+      pointer-events: none;
+    }
+    .touch-btn {
+      pointer-events: auto;
+      touch-action: manipulation;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 165, 197, 0.5);
+      background: linear-gradient(180deg, rgba(141, 31, 78, 0.9), rgba(66, 10, 34, 0.94));
+      color: #ffe6f1;
+      font-family: 'Courier New', monospace;
+      font-size: 0.77rem;
+      letter-spacing: 0.5px;
+      min-height: 56px;
+      min-width: 56px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+    }
+    .touch-btn.pressed {
+      transform: scale(0.95);
+      filter: brightness(1.15);
+    }
+    .touch-btn-dodge {
+      background: linear-gradient(180deg, rgba(39, 107, 160, 0.96), rgba(18, 44, 89, 0.96));
+      border-color: rgba(147, 215, 255, 0.65);
+    }
+    .touch-btn-attack {
+      background: linear-gradient(180deg, rgba(187, 37, 63, 0.95), rgba(103, 11, 31, 0.96));
+      border-color: rgba(255, 160, 175, 0.68);
+    }
+    .touch-btn-disabled {
+      opacity: 0.72;
+      filter: saturate(0.65);
+    }
+    .touch-toast {
+      position: absolute;
+      left: 50%;
+      bottom: max(132px, calc(env(safe-area-inset-bottom) + 120px));
+      transform: translateX(-50%) translateY(8px);
+      background: rgba(15, 5, 9, 0.88);
+      color: #ffd7e7;
+      border: 1px solid rgba(255, 170, 200, 0.5);
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 0.78rem;
+      letter-spacing: 0.4px;
+      opacity: 0;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .touch-toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0px);
+    }
+
+    #chat-toggle {
+      display: none;
+      position: absolute;
+      right: max(10px, env(safe-area-inset-right));
+      top: max(82px, calc(env(safe-area-inset-top) + 72px));
+      z-index: 26;
+      background: linear-gradient(180deg, rgba(54, 13, 34, 0.95), rgba(28, 7, 18, 0.95));
+      color: #ffdbe9;
+      border: 1px solid rgba(255, 160, 202, 0.58);
+      border-radius: 999px;
+      padding: 10px 18px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.78rem;
+      letter-spacing: 0.8px;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+      touch-action: manipulation;
+    }
+
+    /* Touch UI rules must not depend on screen width, otherwise landscape phones look like desktop. */
+    #game-screen.touch-ui-active #controls-hint {
+      display: none;
+    }
+    #game-screen.touch-ui-active #touch-controls {
+      display: block;
+    }
+    #game-screen.touch-ui-active #hud {
+      top: 10px;
+      left: 10px;
+      right: auto;
+      font-size: 0.72rem;
+      padding: 7px 10px;
+    }
+    #game-screen.touch-ui-active #stats-hud {
+      top: 10px;
+      right: 10px;
+      min-width: 148px;
+      font-size: 0.7rem;
+      padding: 8px 10px;
+    }
+    #game-screen.touch-ui-active #chat-toggle {
+      display: block;
+    }
+    #game-screen.touch-ui-active #ability-hud {
+      bottom: max(104px, calc(env(safe-area-inset-bottom) + 92px));
+      grid-template-columns: repeat(4, minmax(74px, 86px));
+      gap: 6px;
+    }
+    #game-screen.touch-ui-active .ability-slot {
+      min-height: 58px;
+    }
+    #game-screen.touch-ui-active .ability-slot .slot-key { font-size: 0.58rem; }
+    #game-screen.touch-ui-active .ability-slot .slot-name { font-size: 0.64rem; }
+    #game-screen.touch-ui-active .ability-slot .slot-state { font-size: 0.62rem; }
+    #game-screen.touch-ui-active #chat-container {
+      display: none;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(90vw, 340px);
+      z-index: 25;
+    }
+    #game-screen.touch-ui-active.chat-open #chat-container {
+      display: block;
+    }
+
+    #game-screen.mobile-portrait #game-canvas,
+    #game-screen.mobile-portrait #touch-controls,
+    #game-screen.mobile-portrait #hud,
+    #game-screen.mobile-portrait #stats-hud,
+    #game-screen.mobile-portrait #ability-hud,
+    #game-screen.mobile-portrait #controls-hint,
+    #game-screen.mobile-portrait #chat-container,
+    #game-screen.mobile-portrait #chat-toggle {
+      display: none !important;
+    }
+    #game-screen.mobile-portrait::after {
+      content: 'Gira tu celular a horizontal para jugar';
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      background: rgba(6, 0, 2, 0.92);
+      color: #ffd5e7;
+      font-size: 1rem;
+      letter-spacing: 0.8px;
+      z-index: 40;
+    }
+
     @media (max-width: 700px) {
       /* Hide desktop control hints on small screens and center chat */
       #controls-hint { display: none; }
       #chat-container { left: 50%; transform: translateX(-50%); }
       #login-screen { padding: 20px; }
       #nickname-input { padding: 14px 18px; font-size: 1.1rem; }
+      #creep-stats-summary { width: min(90vw, 320px); }
+      #game-screen.touch-ui-active #chat-container {
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(90vw, 340px);
+      }
+      #game-screen.touch-ui-active #stats-hud {
+        top: 10px;
+        right: 10px;
+        min-width: 148px;
+        font-size: 0.7rem;
+      }
+      #game-screen.touch-ui-active #hud {
+        top: 10px;
+        left: 10px;
+        right: auto;
+      }
+    }
+
+    @media (max-width: 980px) {
+      #login-screen {
+        width: min(98vw, 980px);
+      }
+      #login-screen h1 {
+        font-size: clamp(1.45rem, 6vw, 2.4rem);
+        letter-spacing: 3px;
+        margin-bottom: 2px;
+      }
+      #login-screen p {
+        font-size: 0.82rem;
+        text-align: center;
+      }
+      #creeps-showcase { padding: 2px 0; }
+      .creep .label {
+        margin-top: 6px;
+        font-size: 0.72rem;
+      }
+    }
+
+    @media (orientation: landscape) and (max-height: 560px) {
+      #login-screen {
+        height: min(98dvh, 560px);
+      }
+      #nickname-input {
+        padding: 10px 14px;
+        font-size: 0.95rem;
+        width: min(72vw, 320px);
+      }
+      #creep-stats-summary {
+        min-width: 200px;
+        font-size: 0.76rem;
+        padding: 8px 10px;
+      }
+      #join-btn {
+        padding: 10px 22px;
+        font-size: 0.9rem;
+      }
+      #chat-toggle {
+        top: max(64px, calc(env(safe-area-inset-top) + 56px));
+      }
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+      #game-screen:not(.touch-ui-active) #touch-controls { display: none; }
     }
   </style>
 </head>
@@ -254,6 +671,17 @@
 
     <div id="creeps-showcase"></div>
 
+    <div id="creep-controls">
+      <div id="selected-creep-wrap">Creep: <span id="selected-creep">ghost</span></div>
+      <div id="creep-stats-summary">
+        <div class="title">Creep Stats</div>
+        <div class="creep-stat-row"><span>HP</span><strong id="creep-stat-hp">-</strong></div>
+        <div class="creep-stat-row"><span>Damage</span><strong id="creep-stat-dmg">-</strong></div>
+        <div class="creep-stat-row"><span>Speed</span><strong id="creep-stat-spd">-</strong></div>
+        <div class="creep-stat-row"><span>Dodge</span><strong id="creep-stat-dodge">-</strong></div>
+      </div>
+    </div>
+
     <input id="nickname-input" type="text" placeholder="Your nickname..." maxlength="20" autocomplete="off" />
     <button id="join-btn">Enter the Graveyard</button>
     <div id="error-msg"></div>
@@ -261,11 +689,55 @@
 
   <div id="game-screen">
     <canvas id="game-canvas"></canvas>
+    <button id="chat-toggle" type="button">Chat</button>
     <div id="hud">Players: <span id="player-count">0</span>/10</div>
+    <div id="stats-hud">
+      <div class="title">Creep Stats</div>
+      <div>Creep: <span id="stat-creep">-</span></div>
+      <div>HP: <span id="stat-hp">-</span></div>
+      <div>Damage: <span id="stat-dmg">-</span></div>
+      <div>Speed: <span id="stat-spd">-</span></div>
+      <div>Dodge: <span id="stat-dodge">-</span></div>
+    </div>
     <div id="controls-hint">
       WASD / Arrow Keys — Move<br>
       Left Click — Dodge<br>
-      Right Click — Attack
+      Right Click — Basic Attack<br>
+      Q / E — Special / Ultimate
+    </div>
+    <div id="ability-hud" aria-hidden="true">
+      <div class="ability-slot ready" data-slot="basic">
+        <div class="slot-fill"></div>
+        <div class="slot-content">
+          <div class="slot-key">RMB</div>
+          <div class="slot-name">Basic</div>
+          <div class="slot-state">Ready</div>
+        </div>
+      </div>
+      <div class="ability-slot ready" data-slot="dodge">
+        <div class="slot-fill"></div>
+        <div class="slot-content">
+          <div class="slot-key">LMB</div>
+          <div class="slot-name">Dodge</div>
+          <div class="slot-state">Ready</div>
+        </div>
+      </div>
+      <div class="ability-slot ready" data-slot="special">
+        <div class="slot-fill"></div>
+        <div class="slot-content">
+          <div class="slot-key">Q</div>
+          <div class="slot-name">Special</div>
+          <div class="slot-state">Ready</div>
+        </div>
+      </div>
+      <div class="ability-slot ready" data-slot="ultimate">
+        <div class="slot-fill"></div>
+        <div class="slot-content">
+          <div class="slot-key">E</div>
+          <div class="slot-name">Ultimate</div>
+          <div class="slot-state">Ready</div>
+        </div>
+      </div>
     </div>
     <div id="chat-container">
         <div class="paw-wrapper" aria-hidden="true">

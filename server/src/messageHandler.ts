@@ -1,7 +1,9 @@
 import { WebSocket } from 'ws';
 import { GameStateManager } from './gameState';
-import { broadcast } from './index';
-import { ClientToServerEvent } from '../../shared/src/types';
+import { broadcast, broadcastVisibleGameState } from './index';
+import { AbilitySlot, ClientToServerEvent } from '../../shared/src/types';
+import { CREEP_STATS, isCreepDesign, randomCreepDesign } from '../../shared/src/creepStats';
+import { CREEP_KITS, createEmptyCooldowns } from '../../shared/src/abilityCatalog';
 
 const CHAT_COOLDOWN_MS = 1000; // 1 second between chat messages
 const NICKNAME_MAX_LENGTH = 20;
@@ -9,6 +11,25 @@ const CHAT_MAX_LENGTH = 200;
 const ACTION_ANIMATION_DURATION_MS = 600;
 const chatCooldowns = new Map<string, number>();
 const NUM_SPRITE_VARIANTS = 4;
+
+function castAndAnimate(gameState: GameStateManager, playerId: string, slot: AbilitySlot, x?: number, y?: number): boolean {
+  const success = gameState.tryCastAbility(playerId, slot, x, y);
+  if (!success) return false;
+  broadcastVisibleGameState();
+  const player = gameState.getPlayer(playerId);
+  const castDuration = player?.castState?.castDurationMs ?? ACTION_ANIMATION_DURATION_MS;
+  const resetDelay = Math.max(ACTION_ANIMATION_DURATION_MS, castDuration);
+  setTimeout(() => {
+    if (gameState.isBatUltimateChanneling(playerId)) return;
+    const p = gameState.getPlayer(playerId);
+    if (p && p.action !== 'move') {
+      p.action = 'idle';
+      p.castState = null;
+      broadcastVisibleGameState();
+    }
+  }, resetDelay);
+  return true;
+}
 
 export function handleClientMessage(
   playerId: string,
@@ -28,8 +49,10 @@ export function handleClientMessage(
       // Check if player already joined
       if (gameState.getPlayer(playerId)) return;
 
-      // Assign a random sprite variant, design and color index server-side
-      const DESIGNS = ['ghost','bat','cat','vampire','zombie','medusa','sphynx'];
+      // Assign selected (or random) creep design and derive visual stats.
+      const chosenDesign = isCreepDesign(message.creepDesign) ? message.creepDesign : randomCreepDesign();
+      const stats = CREEP_STATS[chosenDesign];
+      const kit = CREEP_KITS[chosenDesign];
       // Choose a safe spawn position from game state (avoids obstacles/players)
       const spawn = gameState.findSpawnPosition();
       const player = {
@@ -39,9 +62,18 @@ export function handleClientMessage(
         y: spawn.y,
         action: 'idle' as const,
         spriteVariant: Math.floor(Math.random() * NUM_SPRITE_VARIANTS),
-        design: DESIGNS[Math.floor(Math.random() * DESIGNS.length)],
+        design: chosenDesign,
         colorIdx: Math.floor(Math.random() * 4),
+        maxHealth: stats.maxHealth,
+        health: stats.maxHealth,
+        statDamage: stats.damage,
+        statSpeed: stats.speed,
+        statDodge: stats.dodge,
         lastActionTime: 0,
+        role: kit.role,
+        activeCooldowns: createEmptyCooldowns(),
+        activeStatuses: [],
+        castState: null,
       };
 
       gameState.addPlayer(player);
@@ -50,7 +82,7 @@ export function handleClientMessage(
       ws.send(JSON.stringify({
         type: 'join_success',
         playerId,
-        state: gameState.getState(),
+        state: gameState.getVisibleStateForPlayer(playerId),
       }));
 
       // Broadcast to all others
@@ -70,53 +102,37 @@ export function handleClientMessage(
     case 'player_attack': {
       const player = gameState.getPlayer(playerId);
       if (!player) return;
-      const success = gameState.setPlayerAction(playerId, 'attack');
-      if (success) {
-        broadcast({ type: 'game_state_update', state: gameState.getState() });
-        setTimeout(() => {
-          const p = gameState.getPlayer(playerId);
-          if (p) {
-            p.action = 'idle';
-            broadcast({ type: 'game_state_update', state: gameState.getState() });
-          }
-        }, ACTION_ANIMATION_DURATION_MS);
-      }
+      castAndAnimate(gameState, playerId, 'basic', message.x, message.y);
       break;
     }
 
     case 'player_dodge': {
       const player = gameState.getPlayer(playerId);
       if (!player) return;
-      // Enforce cooldown via setPlayerAction
-      const allowed = gameState.setPlayerAction(playerId, 'dodge');
-      if (!allowed) return;
-
-      // Attempt dash toward provided coordinates (if any)
       const tx = (message as any).x;
       const ty = (message as any).y;
-      const dashed = typeof tx === 'number' && typeof ty === 'number'
-        ? gameState.dashPlayer(playerId, tx, ty)
-        : false;
+      castAndAnimate(gameState, playerId, 'dodge', tx, ty);
+      break;
+    }
 
-      if (!dashed) {
-        // Dash couldn't move the player (e.g. blocked) — clear dodge immediately
-        const p = gameState.getPlayer(playerId);
-        if (p) p.action = 'idle';
-        broadcast({ type: 'game_state_update', state: gameState.getState() });
-        break;
+    case 'ability_cast': {
+      const player = gameState.getPlayer(playerId);
+      if (!player) return;
+      castAndAnimate(gameState, playerId, message.slot, message.x, message.y);
+      break;
+    }
+
+    case 'ability_hold': {
+      const player = gameState.getPlayer(playerId);
+      if (!player) return;
+      if (message.slot !== 'ultimate') return;
+
+      if (message.isHolding) {
+        castAndAnimate(gameState, playerId, message.slot, message.x, message.y);
+      } else {
+        gameState.releaseHeldAbility(playerId, message.slot);
+        broadcastVisibleGameState();
       }
-
-      // Broadcast updated state so clients see the action and new position
-      broadcast({ type: 'game_state_update', state: gameState.getState() });
-
-      // Reset to idle after animation duration
-      setTimeout(() => {
-        const p = gameState.getPlayer(playerId);
-        if (p) {
-          p.action = 'idle';
-          broadcast({ type: 'game_state_update', state: gameState.getState() });
-        }
-      }, ACTION_ANIMATION_DURATION_MS);
       break;
     }
 
@@ -134,12 +150,19 @@ export function handleClientMessage(
       const text = message.text.trim().slice(0, CHAT_MAX_LENGTH);
       if (!text) return;
 
-      broadcast({
-        type: 'chat_broadcast',
+      const payload = {
+        type: 'chat_broadcast' as const,
         playerId,
         nickname: player.nickname,
         text,
         timestamp: now,
+      };
+
+      clients.forEach((client, viewerId) => {
+        if (client.readyState !== WebSocket.OPEN) return;
+        const visible = gameState.getVisibleStateForPlayer(viewerId).players;
+        if (!visible[playerId]) return;
+        client.send(JSON.stringify(payload));
       });
       break;
     }

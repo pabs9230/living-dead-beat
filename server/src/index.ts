@@ -59,14 +59,21 @@ export function broadcast(message: object): void {
   });
 }
 
+export function broadcastVisibleGameState(): void {
+  clients.forEach((client, playerId) => {
+    if (client.readyState !== WebSocket.OPEN) return;
+    client.send(JSON.stringify({
+      type: 'game_state_update',
+      state: gameState.getVisibleStateForPlayer(playerId),
+    }));
+  });
+}
+
 // Server tick loop - broadcast game state at fixed rate
 setInterval(() => {
   if (clients.size > 0) {
     gameState.incrementTick();
-    broadcast({
-      type: 'game_state_update',
-      state: gameState.getState()
-    });
+    broadcastVisibleGameState();
   }
 }, TICK_INTERVAL);
 
