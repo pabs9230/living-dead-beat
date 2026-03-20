@@ -76,7 +76,7 @@ export const CREEP_KITS: Record<CreepDesign, CreepCombatKit> = {
         slot: 'special',
         cooldownMs: 4000,
         castMs: 90,
-        range: 70,
+        range: 66,
         description: 'Two rapid claw strikes.',
       },
       ultimate: {
@@ -150,7 +150,7 @@ export const CREEP_KITS: Record<CreepDesign, CreepCombatKit> = {
         slot: 'special',
         cooldownMs: 12000,
         castMs: 1000,
-        range: 210,
+        range: 105,
         description: 'Frontal ground-snake strike after 1 second cast, damaging all targets in front.',
       },
       ultimate: {
@@ -158,7 +158,7 @@ export const CREEP_KITS: Record<CreepDesign, CreepCombatKit> = {
         slot: 'ultimate',
         cooldownMs: 35000,
         castMs: 500,
-        range: 1280,
+        range: 220,
         description: 'Cone petrify with tier-scaled control duration.',
       },
     },

@@ -38,6 +38,7 @@ wss.on('connection', (ws: WebSocket) => {
   });
 
   ws.on('close', () => {
+    if (!clients.has(playerId)) return;
     console.log(`Client disconnected: ${playerId}`);
     gameState.removePlayer(playerId);
     clients.delete(playerId);
@@ -73,6 +74,18 @@ export function broadcastVisibleGameState(): void {
 setInterval(() => {
   if (clients.size > 0) {
     gameState.incrementTick();
+
+    const expiredDeadPlayerIds = gameState.getExpiredDeadPlayerIds();
+    for (const expiredPlayerId of expiredDeadPlayerIds) {
+      const expiredClient = clients.get(expiredPlayerId);
+      gameState.removePlayer(expiredPlayerId);
+      if (expiredClient && expiredClient.readyState === WebSocket.OPEN) {
+        try { expiredClient.close(4001, 'Death decision timeout'); } catch (_) { /* ignore */ }
+      }
+      clients.delete(expiredPlayerId);
+      broadcast({ type: 'player_left', playerId: expiredPlayerId });
+    }
+
     broadcastVisibleGameState();
   }
 }, TICK_INTERVAL);

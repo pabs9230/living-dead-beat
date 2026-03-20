@@ -74,6 +74,10 @@ export function handleClientMessage(
         activeCooldowns: createEmptyCooldowns(),
         activeStatuses: [],
         castState: null,
+        isDead: false,
+        deathStartedAtMs: 0,
+        deathDeadlineMs: 0,
+        pvpEnabled: false,
       };
 
       gameState.addPlayer(player);
@@ -95,6 +99,7 @@ export function handleClientMessage(
       if (typeof message.x !== 'number' || typeof message.y !== 'number') return;
       const player = gameState.getPlayer(playerId);
       if (!player) return;
+      if (player.isDead) return;
       gameState.updatePlayerPosition(playerId, message.x, message.y);
       break;
     }
@@ -102,6 +107,7 @@ export function handleClientMessage(
     case 'player_attack': {
       const player = gameState.getPlayer(playerId);
       if (!player) return;
+      if (player.isDead) return;
       castAndAnimate(gameState, playerId, 'basic', message.x, message.y);
       break;
     }
@@ -109,6 +115,7 @@ export function handleClientMessage(
     case 'player_dodge': {
       const player = gameState.getPlayer(playerId);
       if (!player) return;
+      if (player.isDead) return;
       const tx = (message as any).x;
       const ty = (message as any).y;
       castAndAnimate(gameState, playerId, 'dodge', tx, ty);
@@ -118,6 +125,7 @@ export function handleClientMessage(
     case 'ability_cast': {
       const player = gameState.getPlayer(playerId);
       if (!player) return;
+      if (player.isDead) return;
       castAndAnimate(gameState, playerId, message.slot, message.x, message.y);
       break;
     }
@@ -125,6 +133,7 @@ export function handleClientMessage(
     case 'ability_hold': {
       const player = gameState.getPlayer(playerId);
       if (!player) return;
+      if (player.isDead) return;
       if (message.slot !== 'ultimate') return;
 
       if (message.isHolding) {
@@ -133,6 +142,24 @@ export function handleClientMessage(
         gameState.releaseHeldAbility(playerId, message.slot);
         broadcastVisibleGameState();
       }
+      break;
+    }
+
+    case 'player_reenter': {
+      const player = gameState.getPlayer(playerId);
+      if (!player) return;
+      if (!player.isDead) return;
+      const ok = gameState.reenterPlayer(playerId);
+      if (ok) broadcastVisibleGameState();
+      break;
+    }
+
+    case 'player_toggle_pvp': {
+      const player = gameState.getPlayer(playerId);
+      if (!player) return;
+      if (typeof message.enabled !== 'boolean') return;
+      player.pvpEnabled = message.enabled;
+      broadcastVisibleGameState();
       break;
     }
 

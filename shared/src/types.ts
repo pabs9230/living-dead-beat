@@ -113,6 +113,10 @@ export interface Player {
   activeCooldowns: Record<AbilitySlot, CooldownState | null>;
   activeStatuses: ActiveStatus[];
   castState: AbilityCastState | null;
+  isDead: boolean;
+  deathStartedAtMs: number;
+  deathDeadlineMs: number;
+  pvpEnabled: boolean;
 }
 
 export interface GameState {
@@ -171,6 +175,15 @@ export interface ChatMessageEvent {
   text: string;
 }
 
+export interface PlayerReenterEvent {
+  type: 'player_reenter';
+}
+
+export interface PlayerTogglePvpEvent {
+  type: 'player_toggle_pvp';
+  enabled: boolean;
+}
+
 export type ClientToServerEvent = 
   | PlayerJoinEvent 
   | PlayerMoveEvent 
@@ -178,7 +191,9 @@ export type ClientToServerEvent =
   | PlayerDodgeEvent 
   | AbilityCastEvent
   | AbilityHoldEvent
-  | ChatMessageEvent;
+  | ChatMessageEvent
+  | PlayerReenterEvent
+  | PlayerTogglePvpEvent;
 
 // Server -> Client events
 export interface GameStateUpdateEvent {

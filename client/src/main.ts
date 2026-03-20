@@ -2,7 +2,7 @@ import { LoginScreen } from './ui/loginScreen';
 import { GameClient } from './network/gameClient';
 import { GameRenderer } from './rendering/renderer';
 import { InputHandler } from './input/inputHandler';
-import { TouchControls } from './ui/touchControls';
+import { AimVector, TouchButtonBehavior, TouchControls } from './ui/touchControls';
 import { AbilitySlot, CreepDesign, GameState, Player, WORLD_WIDTH, WORLD_HEIGHT } from '../../shared/src/types';
 
 // Read Vite environment variables when provided. Vite exposes variables prefixed
@@ -29,6 +29,21 @@ function buildWsUrl(): string {
 }
 const WS_URL = buildWsUrl();
 const ABILITY_ORDER: AbilitySlot[] = ['basic', 'dodge', 'special', 'ultimate'];
+
+type TouchAbilityBehaviorConfig = {
+  special: TouchButtonBehavior;
+  ultimate: TouchButtonBehavior;
+};
+
+function getTouchAbilityBehavior(design?: CreepDesign): TouchAbilityBehaviorConfig {
+  if (design === 'medusa') {
+    return { special: 'directional-release', ultimate: 'directional-release' };
+  }
+  if (design === 'bat') {
+    return { special: 'tap', ultimate: 'hold' };
+  }
+  return { special: 'tap', ultimate: 'tap' };
+}
 
 function isMobileTouchDevice(): boolean {
   const uaMobile = /Android|iPhone|iPad|iPod|Mobi|Mobile/i.test(navigator.userAgent || '');
@@ -125,6 +140,13 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
   const gameScreen = document.getElementById('game-screen') as HTMLDivElement;
   const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
   const chatToggle = document.getElementById('chat-toggle') as HTMLButtonElement | null;
+  const pvpToggleBtn = document.getElementById('pvp-toggle') as HTMLButtonElement | null;
+  const chatInput = document.getElementById('chat-input') as HTMLInputElement;
+  const chatSend = document.getElementById('chat-send') as HTMLButtonElement;
+  const deathOverlay = document.getElementById('death-overlay') as HTMLDivElement | null;
+  const deathCountdownEl = document.getElementById('death-countdown') as HTMLSpanElement | null;
+  const deathReenterBtn = document.getElementById('death-reenter-btn') as HTMLButtonElement | null;
+  const deathExitBtn = document.getElementById('death-exit-btn') as HTMLButtonElement | null;
   const isTouchGame = TouchControls.isTouchDevice();
   void ensureMobileLandscape();
   gameScreen.style.display = 'flex';
@@ -168,6 +190,11 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
   const abilityHud = document.getElementById('ability-hud') as HTMLDivElement | null;
   const abilitySlotEls = new Map<AbilitySlot, HTMLDivElement>();
   let latestLocalPlayer: Player | null = null;
+  let localDeathActive = false;
+  let deathDecisionEndsAt = 0;
+  let deathCountdownTimer: number | null = null;
+  let deathAutoExitTimer: number | null = null;
+  let deathChoiceLocked = false;
 
   if (abilityHud) {
     for (const slot of ABILITY_ORDER) {
@@ -189,6 +216,16 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
     ultimate: 'E',
   };
 
+  let touchControls: TouchControls | null = null;
+  const applyTouchAbilityBehavior = () => {
+    if (!touchControls) return;
+    const cfg = getTouchAbilityBehavior(latestLocalPlayer?.design);
+    touchControls.setButtonBehavior('basic', 'directional-tilt');
+    touchControls.setButtonBehavior('dodge', 'directional-tilt');
+    touchControls.setButtonBehavior('special', cfg.special);
+    touchControls.setButtonBehavior('ultimate', cfg.ultimate);
+  };
+
   const applyAbilityKeyLabels = () => {
     for (const slot of ABILITY_ORDER) {
       const root = abilitySlotEls.get(slot);
@@ -196,6 +233,81 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
       const keyEl = root.querySelector('.slot-key') as HTMLDivElement | null;
       if (!keyEl) continue;
       keyEl.textContent = isTouchGame ? touchKeyMap[slot] : desktopKeyMap[slot];
+    }
+  };
+
+  const returnToCreepSelection = () => {
+    if (deathCountdownTimer !== null) {
+      window.clearInterval(deathCountdownTimer);
+      deathCountdownTimer = null;
+    }
+    if (deathAutoExitTimer !== null) {
+      window.clearTimeout(deathAutoExitTimer);
+      deathAutoExitTimer = null;
+    }
+    client.disconnect();
+    window.location.reload();
+  };
+
+  const setChatInputEnabled = (enabled: boolean) => {
+    chatInput.disabled = !enabled;
+    chatSend.disabled = !enabled;
+    if (!enabled) chatInput.blur();
+  };
+
+  const updatePvpToggleUi = () => {
+    if (!pvpToggleBtn) return;
+    const enabled = Boolean(latestLocalPlayer?.pvpEnabled);
+    pvpToggleBtn.textContent = enabled ? '☠ PVP ON' : '☠ PVP OFF';
+    pvpToggleBtn.classList.toggle('enabled', enabled);
+    pvpToggleBtn.classList.toggle('disabled', !enabled);
+    pvpToggleBtn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    pvpToggleBtn.disabled = localDeathActive;
+  };
+
+  const updateDeathCountdown = () => {
+    if (!deathCountdownEl) return;
+    const remainingMs = Math.max(0, deathDecisionEndsAt - Date.now());
+    const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
+    deathCountdownEl.textContent = String(remainingSec);
+  };
+
+  const setDeathScreenActive = (active: boolean, deadlineMs?: number) => {
+    localDeathActive = active;
+    gameScreen.classList.toggle('death-active', active);
+    if (deathOverlay) deathOverlay.style.display = active ? '' : 'none';
+    inputHandler.setInputEnabled(!active);
+    setChatInputEnabled(!active);
+    updatePvpToggleUi();
+
+    if (active) {
+      deathChoiceLocked = false;
+      if (deathReenterBtn) deathReenterBtn.disabled = false;
+      if (deathExitBtn) deathExitBtn.disabled = false;
+
+      deathDecisionEndsAt = typeof deadlineMs === 'number' && deadlineMs > Date.now()
+        ? deadlineMs
+        : Date.now() + 10000;
+      updateDeathCountdown();
+
+      if (deathCountdownTimer !== null) window.clearInterval(deathCountdownTimer);
+      deathCountdownTimer = window.setInterval(updateDeathCountdown, 140);
+
+      if (deathAutoExitTimer !== null) window.clearTimeout(deathAutoExitTimer);
+      deathAutoExitTimer = window.setTimeout(() => {
+        returnToCreepSelection();
+      }, Math.max(0, deathDecisionEndsAt - Date.now()));
+      return;
+    }
+
+    deathChoiceLocked = false;
+    if (deathCountdownTimer !== null) {
+      window.clearInterval(deathCountdownTimer);
+      deathCountdownTimer = null;
+    }
+    if (deathAutoExitTimer !== null) {
+      window.clearTimeout(deathAutoExitTimer);
+      deathAutoExitTimer = null;
     }
   };
 
@@ -212,7 +324,7 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
 
       let stateText = 'Ready';
       let fillRatio = 0;
-      let cls = 'ready';
+      let cls: 'ready' | 'cooling' | 'casting' = 'ready';
 
       if (player?.castState && player.castState.slot === slot) {
         const elapsed = Date.now() - player.castState.startedAtMs;
@@ -239,11 +351,15 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
 
       if (stateEl) stateEl.textContent = stateText;
       if (fillEl) fillEl.style.height = `${Math.round(fillRatio * 100)}%`;
+      touchControls?.updateAbilityState(slot, {
+        status: cls,
+        text: stateText,
+        fillRatio,
+      });
     }
   };
 
   applyAbilityKeyLabels();
-  let touchControls: TouchControls | null = null;
 
   if (TouchControls.isTouchDevice()) {
     gameScreen.classList.add('touch-ui-active');
@@ -252,35 +368,59 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
       onMove: (vector) => {
         inputHandler.setMobileMoveVector(vector.x, vector.y, vector.magnitude);
       },
-      onAttack: () => {
-        inputHandler.triggerMobileAttack();
+      onAttack: (vector: AimVector) => {
+        inputHandler.triggerMobileAttackWithDirection(vector);
       },
-      onDodge: () => {
-        inputHandler.triggerMobileDodge();
+      onDodge: (vector: AimVector) => {
+        inputHandler.triggerMobileDodgeWithDirection(vector);
       },
-      onSkillPlaceholder: (slot) => {
+      onSkillPlaceholder: (slot, vector: AimVector) => {
         if (slot === 1) {
-          inputHandler.triggerMobileSpecial();
+          inputHandler.triggerMobileSpecialWithDirection(vector);
         } else {
-          inputHandler.triggerMobileUltimate();
+          inputHandler.triggerMobileUltimateCastWithDirection(vector);
         }
       },
-      onSkillHoldStart: (slot) => {
-        if (slot === 2) inputHandler.triggerMobileUltimate();
+      onSkillHoldStart: (slot, vector: AimVector) => {
+        if (slot === 2) inputHandler.triggerMobileUltimateHoldWithDirection(vector);
       },
       onSkillHoldEnd: (slot) => {
         if (slot === 2) inputHandler.triggerMobileUltimateRelease();
       },
     });
+    applyTouchAbilityBehavior();
   }
+
+  pvpToggleBtn?.addEventListener('click', () => {
+    if (localDeathActive) return;
+    if (!latestLocalPlayer) return;
+    client.sendPvpToggle(!latestLocalPlayer.pvpEnabled);
+  });
+
+  deathReenterBtn?.addEventListener('click', () => {
+    if (deathChoiceLocked) return;
+    deathChoiceLocked = true;
+    if (deathReenterBtn) deathReenterBtn.disabled = true;
+    if (deathExitBtn) deathExitBtn.disabled = true;
+    client.sendReenter();
+  });
+
+  deathExitBtn?.addEventListener('click', () => {
+    if (deathChoiceLocked) return;
+    deathChoiceLocked = true;
+    returnToCreepSelection();
+  });
 
   const localPlayer = initialState.players[playerId];
   if (localPlayer) {
     latestLocalPlayer = localPlayer;
     inputHandler.setPosition(localPlayer.x, localPlayer.y, true);
+    applyTouchAbilityBehavior();
     updateLocalStatsHud(localPlayer);
     updateAbilityHud();
+    updatePvpToggleUi();
   }
+  updatePvpToggleUi();
   inputHandler.updateObstacles(initialState.obstacles);
   const initialCount = document.getElementById('player-count');
   if (initialCount) initialCount.textContent = String(initialState.totalPlayers);
@@ -294,9 +434,19 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
       latestLocalPlayer = local;
       inputHandler.setLocalAction(local.action);
       // Force-sync while dodging to avoid client/server position divergence.
-      inputHandler.setPosition(local.x, local.y, local.action === 'dodge');
+      inputHandler.setPosition(local.x, local.y, local.action === 'dodge' || local.isDead);
+      if (local.isDead) {
+        setDeathScreenActive(true, local.deathDeadlineMs);
+      } else if (localDeathActive) {
+        setDeathScreenActive(false);
+      }
+      applyTouchAbilityBehavior();
       updateLocalStatsHud(local);
       updateAbilityHud();
+      updatePvpToggleUi();
+    } else if (localDeathActive) {
+      // Server removed this player (timeout or disconnect): go back to creep selection.
+      returnToCreepSelection();
     }
     const count = document.getElementById('player-count');
     if (count) count.textContent = String(state.totalPlayers);
@@ -308,9 +458,6 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
   });
 
   // Chat UI
-  const chatInput = document.getElementById('chat-input') as HTMLInputElement;
-  const chatSend = document.getElementById('chat-send') as HTMLButtonElement;
-
   const refreshChatToggleLabel = () => {
     if (!chatToggle) return;
     chatToggle.textContent = gameScreen.classList.contains('chat-open') ? 'Cerrar chat' : 'Chat';
@@ -333,6 +480,7 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
   }
 
   function sendChat(): void {
+    if (localDeathActive) return;
     const text = chatInput.value.trim();
     if (text) {
       client.sendChat(text);
@@ -347,6 +495,7 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
   // Global Enter: open (focus) chat when pressed anywhere. If chat already focused,
   // the input handler below decides whether to send or blur.
   window.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (localDeathActive) return;
     if (e.key !== 'Enter') return;
     const active = document.activeElement as HTMLElement | null;
     if (active === chatInput) return; // let chat input handler handle it
@@ -358,6 +507,7 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
 
   // When typing in chat: Enter with text sends and keeps chat open; Enter with empty text blurs (closes)
   chatInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (localDeathActive) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       e.stopPropagation();
@@ -449,6 +599,8 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
   renderer.startRenderLoop();
 
   window.addEventListener('beforeunload', () => {
+    if (deathCountdownTimer !== null) window.clearInterval(deathCountdownTimer);
+    if (deathAutoExitTimer !== null) window.clearTimeout(deathAutoExitTimer);
     touchControls?.destroy();
     cleanupOrientationState();
     window.removeEventListener('resize', handleViewportResize);

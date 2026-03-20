@@ -46,6 +46,10 @@ interface InterpolatedPlayer {
   castTargetY: number | null;
   isPetrified: boolean;
   petrifyRemainingMs: number;
+  isCatRaging: boolean;
+  catRageRemainingMs: number;
+  isSphynxArmored: boolean;
+  sphynxArmorRemainingMs: number;
 }
 
 interface InterpolatedEnemy {
@@ -64,6 +68,9 @@ interface InterpolatedEnemy {
   facingAngle: number;
   isPetrified: boolean;
   petrifyRemainingMs: number;
+  isDying: boolean;
+  deathStartedAtMs: number;
+  deathDurationMs: number;
 }
 
 interface InterpolatedSummon {
@@ -96,6 +103,7 @@ const IDLE_FRAMES = 4;
 const ATTACK_FRAMES = 4;
 const DODGE_FRAMES = 4;
 const ENEMY_ATTACK_ANIM_MS = 480;
+const ENEMY_DEATH_ANIM_MS = 640;
 // Uniform sprite scale multiplier (increase to make characters bigger)
 const SPRITE_SCALE = 1.3;
 
@@ -294,6 +302,8 @@ export class GameRenderer {
     Object.keys(state.players).forEach((id) => {
       const player = state.players[id];
       const petrifyRemainingMs = getStatusRemainingMs(player.activeStatuses as Array<{ kind: string; remainingMs: number }> | undefined, 'petrify');
+      const catRageRemainingMs = getStatusRemainingMs(player.activeStatuses as Array<{ kind: string; remainingMs: number }> | undefined, 'cat_rage');
+      const sphynxArmorRemainingMs = getStatusRemainingMs(player.activeStatuses as Array<{ kind: string; remainingMs: number }> | undefined, 'golden_armor');
       const interp = this.interpolated.get(id);
       if (interp) {
         const prevHealth = interp.health;
@@ -312,6 +322,10 @@ export class GameRenderer {
         interp.targetVisibility = 1;
         interp.isPetrified = petrifyRemainingMs > 0;
         interp.petrifyRemainingMs = petrifyRemainingMs;
+        interp.isCatRaging = catRageRemainingMs > 0;
+        interp.catRageRemainingMs = catRageRemainingMs;
+        interp.isSphynxArmored = sphynxArmorRemainingMs > 0;
+        interp.sphynxArmorRemainingMs = sphynxArmorRemainingMs;
         interp.castStartedAtMs = player.castState?.startedAtMs ?? null;
         interp.castDurationMs = player.castState?.castDurationMs ?? 0;
         if (typeof player.castState?.targetX === 'number' && typeof player.castState?.targetY === 'number') {
@@ -362,6 +376,10 @@ export class GameRenderer {
           castTargetY: typeof player.castState?.targetY === 'number' ? player.castState.targetY : null,
           isPetrified: petrifyRemainingMs > 0,
           petrifyRemainingMs,
+          isCatRaging: catRageRemainingMs > 0,
+          catRageRemainingMs,
+          isSphynxArmored: sphynxArmorRemainingMs > 0,
+          sphynxArmorRemainingMs,
         });
       }
     });
@@ -390,6 +408,9 @@ export class GameRenderer {
         interp.targetVisibility = 1;
         interp.isPetrified = petrifyRemainingMs > 0;
         interp.petrifyRemainingMs = petrifyRemainingMs;
+        interp.isDying = false;
+        interp.deathStartedAtMs = 0;
+        interp.deathDurationMs = ENEMY_DEATH_ANIM_MS;
         interp.lastAttackTime = Math.max(interp.lastAttackTime, enemy.lastAttackTime);
         const damage = Math.max(0, prevHealth - enemy.health);
         if (damage >= 1) {
@@ -412,12 +433,21 @@ export class GameRenderer {
           facingAngle: 0,
           isPetrified: petrifyRemainingMs > 0,
           petrifyRemainingMs,
+          isDying: false,
+          deathStartedAtMs: 0,
+          deathDurationMs: ENEMY_DEATH_ANIM_MS,
         });
       }
     });
 
+    const nowMs = performance.now();
     for (const [id, enemy] of this.interpolatedEnemies) {
-      if (!state.enemies[id]) enemy.targetVisibility = 0;
+      if (!state.enemies[id] && !enemy.isDying) {
+        enemy.isDying = true;
+        enemy.deathStartedAtMs = nowMs;
+        enemy.deathDurationMs = enemy.isBoss ? ENEMY_DEATH_ANIM_MS + 180 : ENEMY_DEATH_ANIM_MS;
+        enemy.targetVisibility = 1;
+      }
     }
 
     // Update summon interpolation targets
@@ -653,6 +683,14 @@ export class GameRenderer {
     }
 
     for (const enemy of this.interpolatedEnemies.values()) {
+      if (enemy.isDying) {
+        const deathProgress = Math.max(0, Math.min(1, (timestamp - enemy.deathStartedAtMs) / Math.max(1, enemy.deathDurationMs)));
+        enemy.targetVisibility = deathProgress >= 1 ? 0 : 1;
+        const deathVisibility = Math.max(0, 1 - deathProgress * 1.08);
+        enemy.visibilityAlpha += (deathVisibility - enemy.visibilityAlpha) * 0.28;
+        continue;
+      }
+
       enemy.currentX += (enemy.targetX - enemy.currentX) * 0.16;
       enemy.currentY += (enemy.targetY - enemy.currentY) * 0.16;
       enemy.visibilityAlpha += (enemy.targetVisibility - enemy.visibilityAlpha) * 0.2;
@@ -919,12 +957,17 @@ export class GameRenderer {
   private drawEnemy(ctx: CanvasRenderingContext2D, enemy: InterpolatedEnemy): void {
     const x = Math.round(enemy.currentX);
     const y = Math.round(enemy.currentY);
+    const deathProgress = enemy.isDying
+      ? Math.max(0, Math.min(1, (this.time - enemy.deathStartedAtMs) / Math.max(1, enemy.deathDurationMs)))
+      : 0;
+    const isMarkedDying = enemy.isDying;
+    const isDying = isMarkedDying && deathProgress < 1;
     const moveDX = enemy.targetX - enemy.currentX;
     const moveDY = enemy.targetY - enemy.currentY;
     const moveMag = Math.hypot(moveDX, moveDY);
-    const isMoving = moveMag > 0.28;
+    const isMoving = !isDying && moveMag > 0.28;
     const attackElapsed = Date.now() - enemy.lastAttackTime;
-    const isAttacking = attackElapsed >= 0 && attackElapsed <= ENEMY_ATTACK_ANIM_MS;
+    const isAttacking = !isDying && attackElapsed >= 0 && attackElapsed <= ENEMY_ATTACK_ANIM_MS;
     const attackProgress = isAttacking ? Math.min(1, attackElapsed / ENEMY_ATTACK_ANIM_MS) : 0;
     const attackPulse = isAttacking ? Math.sin(attackProgress * Math.PI) : 0;
 
@@ -936,12 +979,17 @@ export class GameRenderer {
 
     const facingSign = Math.cos(enemy.facingAngle) >= 0 ? 1 : -1;
     const movementTilt = isMoving ? Math.max(-0.3, Math.min(0.3, enemy.facingAngle * 0.11)) : 0;
+    const deathDrop = isDying ? deathProgress * (enemy.isBoss ? 18 : 13) : 0;
+    const deathTilt = isDying ? facingSign * deathProgress * (enemy.isBoss ? 0.24 : 0.42) : 0;
+    const deathStretchX = isDying ? 1 + deathProgress * 0.22 : 1;
+    const deathSquashY = isDying ? Math.max(0.25, 1 - deathProgress * 0.62) : 1;
+    const deathFade = isDying ? Math.max(0.08, 1 - deathProgress * 0.92) : 1;
 
     ctx.save();
-    ctx.globalAlpha = Math.max(0.1, Math.min(1, enemy.visibilityAlpha));
-    ctx.translate(x, y + bob);
-    if (movementTilt !== 0) ctx.rotate(movementTilt);
-    ctx.scale(facingSign, 1);
+    ctx.globalAlpha = Math.max(0.08, Math.min(1, enemy.visibilityAlpha * deathFade));
+    ctx.translate(x, y + bob + deathDrop);
+    if (movementTilt !== 0 || deathTilt !== 0) ctx.rotate(movementTilt + deathTilt);
+    ctx.scale(facingSign * deathStretchX, deathSquashY);
 
     if (enemy.type === 'skeleton') {
       const shakeX = Math.sin(this.time * 0.023 + x * 0.17) * 0.85;
@@ -1322,6 +1370,55 @@ export class GameRenderer {
 
     ctx.restore();
 
+    if (isMarkedDying) {
+      if (isDying) {
+        ctx.save();
+        const poolGrow = 0.38 + deathProgress * 1.12;
+        const poolAlpha = Math.max(0, 0.32 - deathProgress * 0.16);
+        ctx.fillStyle = `rgba(136,18,34,${poolAlpha.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.ellipse(
+          x,
+          y + (enemy.isBoss ? 26 : 18),
+          (enemy.isBoss ? 32 : 20) * poolGrow,
+          (enemy.isBoss ? 8 : 5) * poolGrow,
+          0,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+
+        for (let i = 0; i < 4; i++) {
+          const phase = this.time * 0.005 + i * 1.7 + (enemy.id.length % 5) * 0.4;
+          const drift = Math.sin(phase) * (6 + i * 1.8);
+          const lift = deathProgress * 20 + i * 4;
+          const r = Math.max(1.4, 3.8 - deathProgress * 2 - i * 0.35);
+          const alpha = Math.max(0, 0.26 - deathProgress * 0.2 - i * 0.03);
+          ctx.fillStyle = `rgba(190,68,86,${alpha.toFixed(3)})`;
+          ctx.beginPath();
+          ctx.ellipse(x + drift, y + 8 - lift, r, r * 0.68, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        const lethalIndicator = Math.max(0, 1 - deathProgress / 0.34);
+        if (lethalIndicator > 0.01) {
+          ctx.globalAlpha = Math.min(1, lethalIndicator);
+          ctx.font = `bold ${enemy.isBoss ? 16 : 13}px monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          const textY = y - (enemy.isBoss ? 74 : 52) - deathProgress * 16;
+          const label = 'LETHAL!';
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = 'rgba(62,8,14,0.92)';
+          ctx.strokeText(label, x, textY);
+          ctx.fillStyle = 'rgba(255,178,188,0.98)';
+          ctx.fillText(label, x, textY);
+        }
+        ctx.restore();
+      }
+      return;
+    }
+
     const barWidth = enemy.isBoss ? 70 : 46;
     const barY = y - (enemy.isBoss ? 64 : enemy.type === 'gravekeeper' ? 46 : 30);
     const hpColor = this.getHealthColor(enemy.health, enemy.maxHealth);
@@ -1601,6 +1698,10 @@ export class GameRenderer {
         : 0,
       castTargetOffsetX: typeof interp.castTargetX === 'number' ? (interp.castTargetX - x) : undefined,
       castTargetOffsetY: typeof interp.castTargetY === 'number' ? (interp.castTargetY - y) : undefined,
+      catRageActive: interp.isCatRaging,
+      catRageRemainingMs: interp.catRageRemainingMs,
+      sphynxArmorActive: interp.isSphynxArmored,
+      sphynxArmorRemainingMs: interp.sphynxArmorRemainingMs,
     };
 
     switch (design) {

@@ -7,6 +7,7 @@ const MOVE_KEY_CODES = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown
 const DASH_DIRECTION_BLEND = 0.2;
 const DASH_AIM_DISTANCE = 240;
 const AUTHORITATIVE_SNAP_DISTANCE = 48;
+const MOBILE_AIM_THRESHOLD = 0.14;
 
 // Player collision half-sizes (must match server constants)
 // Known obstacle half-sizes (use server constants where possible). Include bush and
@@ -62,6 +63,7 @@ export class InputHandler {
   private mobileMoveY = 0;
   private lastMobileDirection = { x: 1, y: 0 };
   private ultimateHoldActive = false;
+  private inputEnabled = true;
 
   private getCursorWorldPoint(): { x: number; y: number } | undefined {
     if (this.screenToWorld && this.hasPointerPosition) {
@@ -70,7 +72,17 @@ export class InputHandler {
     return undefined;
   }
 
-  private getAbilityAimPoint(): { x: number; y: number } | undefined {
+  private getAbilityAimPoint(preferredDirection?: { x: number; y: number }): { x: number; y: number } | undefined {
+    if (preferredDirection) {
+      const mag = Math.hypot(preferredDirection.x, preferredDirection.y);
+      if (mag > 0.001) {
+        return {
+          x: this.playerX + (preferredDirection.x / mag) * DASH_AIM_DISTANCE,
+          y: this.playerY + (preferredDirection.y / mag) * DASH_AIM_DISTANCE,
+        };
+      }
+    }
+
     const cursor = this.getCursorWorldPoint();
     if (cursor) return cursor;
 
@@ -85,8 +97,9 @@ export class InputHandler {
     return undefined;
   }
 
-  private castAbility(slot: 'special' | 'ultimate'): void {
-    const aim = this.getAbilityAimPoint();
+  private castAbility(slot: 'special' | 'ultimate', preferredDirection?: { x: number; y: number }): void {
+    if (!this.inputEnabled) return;
+    const aim = this.getAbilityAimPoint(preferredDirection);
     if (aim) {
       this.client.sendAbilityCast(slot, Math.round(aim.x), Math.round(aim.y));
       return;
@@ -94,10 +107,11 @@ export class InputHandler {
     this.client.sendAbilityCast(slot);
   }
 
-  private startUltimateHold(): void {
+  private startUltimateHold(preferredDirection?: { x: number; y: number }): void {
+    if (!this.inputEnabled) return;
     if (this.ultimateHoldActive) return;
     this.ultimateHoldActive = true;
-    const aim = this.getAbilityAimPoint();
+    const aim = this.getAbilityAimPoint(preferredDirection);
     if (aim) {
       this.client.sendAbilityHold('ultimate', true, Math.round(aim.x), Math.round(aim.y));
       return;
@@ -111,7 +125,14 @@ export class InputHandler {
     this.client.sendAbilityHold('ultimate', false);
   }
 
-  private sendBasicAttack(targetWorld?: { x: number; y: number }): void {
+  private sendBasicAttack(targetWorld?: { x: number; y: number }, preferredDirection?: { x: number; y: number }): void {
+    if (!this.inputEnabled) return;
+    const preferred = this.getAbilityAimPoint(preferredDirection);
+    if (preferred) {
+      this.client.sendAttack(Math.round(preferred.x), Math.round(preferred.y));
+      return;
+    }
+
     const cursor = targetWorld ?? this.getCursorWorldPoint();
     if (cursor) {
       this.client.sendAttack(Math.round(cursor.x), Math.round(cursor.y));
@@ -173,6 +194,7 @@ export class InputHandler {
   }
 
   private sendContextualDodge(targetWorld?: { x: number; y: number }): void {
+    if (!this.inputEnabled) return;
     const bias = this.getDashBiasDirection();
 
     if (targetWorld) {
@@ -216,6 +238,7 @@ export class InputHandler {
   }
 
   private sendDodgeWithDirection(direction: { x: number; y: number }): void {
+    if (!this.inputEnabled) return;
     const mag = Math.hypot(direction.x, direction.y);
     if (mag <= 0.001) {
       this.sendContextualDodge();
@@ -233,6 +256,7 @@ export class InputHandler {
     this.screenToWorld = screenToWorld;
 
     window.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (!this.inputEnabled) return;
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       if (!MOVE_KEY_CODES.has(e.code)) return;
@@ -241,6 +265,7 @@ export class InputHandler {
     });
 
     window.addEventListener('keyup', (e: KeyboardEvent) => {
+      if (!this.inputEnabled) return;
       if (MOVE_KEY_CODES.has(e.code)) {
         e.preventDefault();
         this.pressedCodes.delete(e.code);
@@ -254,6 +279,7 @@ export class InputHandler {
     });
 
     window.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (!this.inputEnabled) return;
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       if (e.repeat) return;
@@ -278,6 +304,7 @@ export class InputHandler {
     // Pointer events (touch / pen) — prefer pointer API when available
     if ((window as any).PointerEvent) {
       canvas.addEventListener('pointerdown', (e: PointerEvent) => {
+        if (!this.inputEnabled) return;
         const rect = canvas.getBoundingClientRect();
         const canvasX = e.clientX - rect.left;
         const canvasY = e.clientY - rect.top;
@@ -311,6 +338,7 @@ export class InputHandler {
       });
 
       canvas.addEventListener('pointermove', (e: PointerEvent) => {
+        if (!this.inputEnabled) return;
         const rect = canvas.getBoundingClientRect();
         const canvasX = e.clientX - rect.left;
         const canvasY = e.clientY - rect.top;
@@ -325,6 +353,7 @@ export class InputHandler {
       });
 
       const handlePointerUp = (e: PointerEvent) => {
+        if (!this.inputEnabled) return;
         if (e.pointerId !== this.pointerId) return;
         try { canvas.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
         const rect = canvas.getBoundingClientRect();
@@ -373,6 +402,7 @@ export class InputHandler {
     } else {
       // Fallback for mouse-only environments: left click = dodge, right click = attack
       canvas.addEventListener('mousedown', (e: MouseEvent) => {
+        if (!this.inputEnabled) return;
         const rect = canvas.getBoundingClientRect();
         const canvasX = e.clientX - rect.left;
         const canvasY = e.clientY - rect.top;
@@ -397,6 +427,7 @@ export class InputHandler {
       });
 
       canvas.addEventListener('mousemove', (e: MouseEvent) => {
+        if (!this.inputEnabled) return;
         const rect = canvas.getBoundingClientRect();
         this.hasPointerPosition = true;
         this.pointerCanvasX = e.clientX - rect.left;
@@ -441,6 +472,11 @@ export class InputHandler {
   }
 
   setMobileMoveVector(x: number, y: number, magnitude: number): void {
+    if (!this.inputEnabled) {
+      this.mobileMoveX = 0;
+      this.mobileMoveY = 0;
+      return;
+    }
     const clamped = Math.max(0, Math.min(1, magnitude));
     const mag = Math.hypot(x, y);
     if (mag <= 0.001 || clamped <= 0.01) {
@@ -457,26 +493,95 @@ export class InputHandler {
   }
 
   triggerMobileAttack(): void {
+    if (!this.inputEnabled) return;
     this.sendBasicAttack({
       x: this.playerX + this.lastMobileDirection.x * DASH_AIM_DISTANCE,
       y: this.playerY + this.lastMobileDirection.y * DASH_AIM_DISTANCE,
     });
   }
 
+  triggerMobileAttackWithDirection(direction: { x: number; y: number; magnitude: number }): void {
+    if (!this.inputEnabled) return;
+    if (direction.magnitude >= MOBILE_AIM_THRESHOLD) {
+      this.sendBasicAttack(undefined, direction);
+      return;
+    }
+    this.triggerMobileAttack();
+  }
+
   triggerMobileDodge(): void {
+    if (!this.inputEnabled) return;
     this.sendDodgeWithDirection(this.lastMobileDirection);
   }
 
+  triggerMobileDodgeWithDirection(direction: { x: number; y: number; magnitude: number }): void {
+    if (!this.inputEnabled) return;
+    if (direction.magnitude >= MOBILE_AIM_THRESHOLD) {
+      this.sendDodgeWithDirection(direction);
+      return;
+    }
+    this.triggerMobileDodge();
+  }
+
   triggerMobileSpecial(): void {
+    if (!this.inputEnabled) return;
     this.castAbility('special');
   }
 
-  triggerMobileUltimate(): void {
+  triggerMobileSpecialWithDirection(direction: { x: number; y: number; magnitude: number }): void {
+    if (!this.inputEnabled) return;
+    if (direction.magnitude >= MOBILE_AIM_THRESHOLD) {
+      this.castAbility('special', direction);
+      return;
+    }
+    this.triggerMobileSpecial();
+  }
+
+  triggerMobileUltimateCast(): void {
+    if (!this.inputEnabled) return;
+    this.castAbility('ultimate');
+  }
+
+  triggerMobileUltimateCastWithDirection(direction: { x: number; y: number; magnitude: number }): void {
+    if (!this.inputEnabled) return;
+    if (direction.magnitude >= MOBILE_AIM_THRESHOLD) {
+      this.castAbility('ultimate', direction);
+      return;
+    }
+    this.triggerMobileUltimateCast();
+  }
+
+  triggerMobileUltimateHold(): void {
+    if (!this.inputEnabled) return;
     this.startUltimateHold();
+  }
+
+  triggerMobileUltimateHoldWithDirection(direction: { x: number; y: number; magnitude: number }): void {
+    if (!this.inputEnabled) return;
+    if (direction.magnitude >= MOBILE_AIM_THRESHOLD) {
+      this.startUltimateHold(direction);
+      return;
+    }
+    this.triggerMobileUltimateHold();
   }
 
   triggerMobileUltimateRelease(): void {
     this.stopUltimateHold();
+  }
+
+  setInputEnabled(enabled: boolean): void {
+    if (this.inputEnabled === enabled) return;
+    this.inputEnabled = enabled;
+    if (!enabled) {
+      this.pressedCodes.clear();
+      this.pointerDown = false;
+      this.pointerId = null;
+      this.pointerType = null;
+      this.pointerMoved = false;
+      this.mobileMoveX = 0;
+      this.mobileMoveY = 0;
+      this.stopUltimateHold();
+    }
   }
 
   // Called by the main loop when server state updates arrive so we know
@@ -488,6 +593,11 @@ export class InputHandler {
   }
 
   private update(): void {
+    if (!this.inputEnabled) {
+      requestAnimationFrame(() => this.update());
+      return;
+    }
+
     let dx = 0;
     let dy = 0;
 

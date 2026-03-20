@@ -87,6 +87,14 @@ export class GameClient {
     this.send({ type: 'ability_hold', slot, isHolding, x, y });
   }
 
+  sendReenter(): void {
+    this.send({ type: 'player_reenter' });
+  }
+
+  sendPvpToggle(enabled: boolean): void {
+    this.send({ type: 'player_toggle_pvp', enabled });
+  }
+
   disconnect(): void {
     this.ws.close();
   }

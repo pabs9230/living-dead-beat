@@ -8,6 +8,10 @@ export interface SpriteAnimationState {
   castProgress?: number;
   castTargetOffsetX?: number;
   castTargetOffsetY?: number;
+  catRageActive?: boolean;
+  catRageRemainingMs?: number;
+  sphynxArmorActive?: boolean;
+  sphynxArmorRemainingMs?: number;
 }
 
 const BAT_SPECIAL_AREA_RADIUS = 1760;
@@ -64,6 +68,16 @@ export function drawBat(
   const specialPulse = action === 'special' ? (0.5 + Math.sin((time || 0) * 0.018 + variant * 0.5) * 0.5) : 0;
   const ultimatePulse = action === 'ultimate' ? (0.5 + Math.sin((time || 0) * 0.024 + variant * 0.8) * 0.5) : 0;
   const castProgress = Math.max(0, Math.min(1, anim?.castProgress ?? 0));
+  const rawTargetX = typeof anim?.castTargetOffsetX === 'number' ? anim.castTargetOffsetX : Math.cos(facingAngle) * 34;
+  const rawTargetY = typeof anim?.castTargetOffsetY === 'number' ? anim.castTargetOffsetY : Math.sin(facingAngle) * 34;
+  const rawTargetDist = Math.hypot(rawTargetX, rawTargetY);
+  const biteMaxDistance = 96;
+  const biteTargetX = rawTargetDist > biteMaxDistance
+    ? (rawTargetX / Math.max(0.001, rawTargetDist)) * biteMaxDistance
+    : rawTargetX;
+  const biteTargetY = rawTargetDist > biteMaxDistance
+    ? (rawTargetY / Math.max(0.001, rawTargetDist)) * biteMaxDistance
+    : rawTargetY;
   const areaCenterX = 0;
   const areaCenterY = 0;
   const lunge = attackPulse * 6 + dodgePulse * 8;
@@ -233,13 +247,67 @@ export function drawBat(
 
   if (action === 'attack') {
     ctx.save();
-    ctx.rotate(facingAngle);
-    ctx.globalAlpha = 0.34 + attackPulse * 0.45;
-    ctx.strokeStyle = 'rgba(255,188,166,0.9)';
-    ctx.lineWidth = 1.8;
+    const biteAngle = Math.atan2(biteTargetY, biteTargetX);
+    const framePhase = Math.max(0, Math.min(1, (animFrame % 4) / 3));
+    const bitePulse = castProgress > 0 ? Math.sin(castProgress * Math.PI) : Math.sin(framePhase * Math.PI);
+    const jawClose = Math.max(0, bitePulse);
+    const jawGap = 8 - jawClose * 5.6;
+
+    ctx.translate(biteTargetX, biteTargetY);
+    ctx.rotate(biteAngle);
+
+    ctx.globalAlpha = 0.2 + jawClose * 0.26;
+    ctx.fillStyle = 'rgba(112,12,24,0.68)';
     ctx.beginPath();
-    ctx.moveTo(7, -5);
-    ctx.quadraticCurveTo(15 + attackPulse * 8, -7, 23 + attackPulse * 10, -5);
+    ctx.ellipse(0, 0, 10 + jawClose * 2.2, 5.4 + jawClose * 1.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.globalAlpha = 0.45 + jawClose * 0.46;
+    ctx.strokeStyle = 'rgba(255,160,158,0.9)';
+    ctx.lineWidth = 1.3 + jawClose * 1.4;
+    ctx.beginPath();
+    ctx.arc(0, 0, 7.2 + jawClose * 2.8, -Math.PI * 0.2, Math.PI * 1.2);
+    ctx.stroke();
+
+    ctx.fillStyle = '#fff4ea';
+    const fangLength = 8.5 + jawClose * 3.8;
+
+    ctx.beginPath();
+    ctx.moveTo(-3.4, -jawGap);
+    ctx.lineTo(-1.8, -jawGap - fangLength);
+    ctx.lineTo(-0.5, -jawGap + 0.8);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(3.4, -jawGap);
+    ctx.lineTo(1.8, -jawGap - fangLength);
+    ctx.lineTo(0.5, -jawGap + 0.8);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(-3.4, jawGap);
+    ctx.lineTo(-1.8, jawGap + fangLength);
+    ctx.lineTo(-0.5, jawGap - 0.8);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(3.4, jawGap);
+    ctx.lineTo(1.8, jawGap + fangLength);
+    ctx.lineTo(0.5, jawGap - 0.8);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.globalAlpha = 0.26 + jawClose * 0.3;
+    ctx.strokeStyle = 'rgba(255,98,110,0.86)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-5.5 - jawClose * 2.2, -3.5);
+    ctx.lineTo(5.5 + jawClose * 2.2, 3.5);
+    ctx.moveTo(-5.5 - jawClose * 2.2, 3.5);
+    ctx.lineTo(5.5 + jawClose * 2.2, -3.5);
     ctx.stroke();
     ctx.restore();
   }
@@ -263,21 +331,22 @@ export function drawCat(
   const attackPulse = action === 'attack' ? Math.sin((animFrame / 3) * Math.PI) : 0;
   const dodgePulse = action === 'dodge' ? (0.6 + Math.abs(Math.sin((time || 0) * 0.035 + variant)) * 0.4) : 0;
   const specialPulse = action === 'special' ? (0.5 + Math.sin((time || 0) * 0.02 + variant * 0.7) * 0.5) : 0;
-  const ragePulse = action === 'ultimate' ? (0.5 + Math.sin((time || 0) * 0.028 + variant * 0.9) * 0.5) : 0;
+  const rageActive = Boolean(anim?.catRageActive) || (anim?.catRageRemainingMs ?? 0) > 0 || action === 'ultimate';
+  const ragePulse = rageActive ? (0.5 + Math.sin((time || 0) * 0.028 + variant * 0.9) * 0.5) : 0;
   const lunge = attackPulse * 4.8 + dodgePulse * 6.4;
   ctx.translate(Math.cos(facingAngle) * lunge, bob + Math.sin(facingAngle) * lunge * 0.55 - dodgePulse * 1.4);
 
-  if (action === 'ultimate') {
+  if (rageActive) {
     ctx.save();
-    ctx.globalAlpha = 0.26 + ragePulse * 0.24;
+    ctx.globalAlpha = 0.2 + ragePulse * 0.3;
     ctx.strokeStyle = 'rgba(229,70,84,0.95)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.ellipse(0, 6, 24 + ragePulse * 3, 11 + ragePulse * 2, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 6, 25 + ragePulse * 4, 11 + ragePulse * 3, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.strokeStyle = 'rgba(255,172,122,0.8)';
     ctx.beginPath();
-    ctx.ellipse(0, 6, 30 + ragePulse * 4, 14 + ragePulse * 2, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 6, 32 + ragePulse * 4, 14 + ragePulse * 3, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
@@ -299,8 +368,13 @@ export function drawCat(
   }
 
   // Layout for in-game cat
-  const headR = 10;
-  const bodyX = -8, bodyY = -2, bodyW = 20, bodyH = 14;
+  const headR = rageActive ? 11.5 : 10;
+  const bodyX = rageActive ? -9 : -8;
+  const bodyY = rageActive ? -3 : -2;
+  const bodyW = rageActive ? 22 : 20;
+  const bodyH = rageActive ? 15 : 14;
+  const catBodyColor = rageActive ? '#5a171c' : colors.body;
+  const catOutlineColor = rageActive ? '#25090d' : colors.outline;
 
   // Tail (senoidal along its length) - sample a smooth sine-wave-shaped curve
   const phase = (time * 0.0015) + (variant * 0.43);
@@ -334,18 +408,57 @@ export function drawCat(
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.beginPath(); ctx.moveTo(tailBaseX, tailBaseY);
   for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-  ctx.strokeStyle = colors.outline; ctx.lineWidth = 6; ctx.stroke();
+  ctx.strokeStyle = catOutlineColor; ctx.lineWidth = 6; ctx.stroke();
 
   ctx.beginPath(); ctx.moveTo(tailBaseX, tailBaseY);
   for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-  ctx.strokeStyle = colors.body; ctx.lineWidth = 4; ctx.stroke();
+  ctx.strokeStyle = catBodyColor; ctx.lineWidth = 4; ctx.stroke();
+
+  if (rageActive) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,174,170,0.82)';
+    ctx.lineWidth = 1.2;
+    ctx.globalAlpha = 0.35 + ragePulse * 0.25;
+    for (let i = 2; i < pts.length; i += 2) {
+      const p = pts[i];
+      const prev = pts[i - 1];
+      const segX = p.x - prev.x;
+      const segY = p.y - prev.y;
+      const segLen = Math.hypot(segX, segY) || 1;
+      const nx = -segY / segLen;
+      const ny = segX / segLen;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x + nx * (2.8 + ragePulse * 2.2), p.y + ny * (2.8 + ragePulse * 2.2));
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 
   // Body
-  ctx.fillStyle = colors.body;
-  ctx.strokeStyle = colors.outline;
+  ctx.fillStyle = catBodyColor;
+  ctx.strokeStyle = catOutlineColor;
   ctx.lineWidth = isLocal ? 2 : 1.5;
   ctx.fillRect(bodyX, bodyY, bodyW, bodyH);
   ctx.strokeRect(bodyX, bodyY, bodyW, bodyH);
+
+  if (rageActive) {
+    ctx.save();
+    ctx.globalAlpha = 0.8;
+    ctx.strokeStyle = 'rgba(255,170,170,0.85)';
+    ctx.lineWidth = 1.3;
+    const backY = bodyY + 1;
+    for (let i = 0; i < 6; i++) {
+      const sx = bodyX + 2 + i * 3.6;
+      const spikeH = 2.6 + ((i % 2) * 1.2) + ragePulse * 2.2;
+      ctx.beginPath();
+      ctx.moveTo(sx, backY);
+      ctx.lineTo(sx + 1.8, backY - spikeH);
+      ctx.lineTo(sx + 3.3, backY);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 
   // Paws
   const pawY = bodyY + bodyH - 1;
@@ -357,49 +470,183 @@ export function drawCat(
     ctx.beginPath(); ctx.ellipse(px, pawY, 2.8, 1.8, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   }
 
-  if (action === 'attack' || action === 'special') {
-    const slashGlow = action === 'special' ? 'rgba(255,112,112,0.95)' : 'rgba(255,222,178,0.9)';
+  if (action === 'attack') {
+    const slashGlow = 'rgba(255,222,178,0.9)';
     ctx.save();
     ctx.rotate(facingAngle);
-    ctx.globalAlpha = 0.38 + attackPulse * 0.35 + specialPulse * 0.2;
+    ctx.globalAlpha = 0.38 + attackPulse * 0.35;
     ctx.strokeStyle = slashGlow;
-    ctx.lineWidth = action === 'special' ? 2.2 : 1.6;
+    ctx.lineWidth = 1.7;
     for (let i = -1; i <= 1; i++) {
       ctx.beginPath();
       ctx.moveTo(7, -2 + i * 2.3);
-      ctx.quadraticCurveTo(15 + attackPulse * 6 + specialPulse * 5, -6 + i * 3, 23 + attackPulse * 9 + specialPulse * 8, -2 + i * 2.8);
+      ctx.quadraticCurveTo(15 + attackPulse * 6, -6 + i * 3, 23 + attackPulse * 9, -2 + i * 2.8);
       ctx.stroke();
     }
     ctx.restore();
   }
 
+  if (action === 'special') {
+    const strikeCycle = (((time || 0) * 0.0018) + variant * 0.17) % 1;
+    const strikeA = Math.max(0, 1 - Math.abs(strikeCycle - 0.26) / 0.2);
+    const strikeB = Math.max(0, 1 - Math.abs(strikeCycle - 0.74) / 0.2);
+    const targetX = typeof anim?.castTargetOffsetX === 'number' ? anim.castTargetOffsetX : Math.cos(facingAngle) * 28;
+    const targetY = typeof anim?.castTargetOffsetY === 'number' ? anim.castTargetOffsetY : Math.sin(facingAngle) * 28;
+    const targetDist = Math.hypot(targetX, targetY);
+    const tx = targetDist > 0.001 ? targetX : Math.cos(facingAngle) * 28;
+    const ty = targetDist > 0.001 ? targetY : Math.sin(facingAngle) * 28;
+    const perpX = -Math.sin(facingAngle);
+    const perpY = Math.cos(facingAngle);
+
+    ctx.save();
+
+    if (strikeA > 0.01) {
+      const cx = tx + perpX * 6;
+      const cy = ty + perpY * 6;
+      const len = 12 + strikeA * 9;
+      ctx.globalAlpha = 0.28 + strikeA * 0.7;
+      ctx.strokeStyle = 'rgba(255,124,126,0.98)';
+      ctx.lineWidth = 2.2 + strikeA * 2.1;
+      ctx.beginPath();
+      ctx.moveTo(cx - len, cy - len);
+      ctx.lineTo(cx + len, cy + len);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx - len, cy + len);
+      ctx.lineTo(cx + len, cy - len);
+      ctx.stroke();
+
+      ctx.globalAlpha = 0.18 + strikeA * 0.22;
+      ctx.strokeStyle = 'rgba(255,204,190,0.9)';
+      ctx.lineWidth = 1.1 + strikeA;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 8 + strikeA * 8, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = `rgba(255,170,170,${(0.36 + strikeA * 0.4).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 3.1 + strikeA * 2, 2.1 + strikeA * 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (strikeB > 0.01) {
+      const cx = tx - perpX * 6;
+      const cy = ty - perpY * 6;
+      const len = 12 + strikeB * 9;
+      ctx.globalAlpha = 0.28 + strikeB * 0.7;
+      ctx.strokeStyle = 'rgba(255,214,166,0.97)';
+      ctx.lineWidth = 2.2 + strikeB * 2.1;
+      ctx.beginPath();
+      ctx.moveTo(cx - len, cy - len);
+      ctx.lineTo(cx + len, cy + len);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx - len, cy + len);
+      ctx.lineTo(cx + len, cy - len);
+      ctx.stroke();
+
+      ctx.globalAlpha = 0.18 + strikeB * 0.22;
+      ctx.strokeStyle = 'rgba(255,230,190,0.9)';
+      ctx.lineWidth = 1.1 + strikeB;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 8 + strikeB * 8, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = `rgba(255,226,180,${(0.36 + strikeB * 0.4).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 3.1 + strikeB * 2, 2.1 + strikeB * 1.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const xImpact = Math.max(0, 1 - Math.abs(strikeCycle - 0.5) / 0.22);
+    if (xImpact > 0.02) {
+      ctx.globalAlpha = 0.16 + xImpact * 0.24;
+      ctx.strokeStyle = 'rgba(255,230,194,0.9)';
+      ctx.lineWidth = 1.3 + xImpact * 1.6;
+      ctx.beginPath();
+      ctx.arc(tx, ty, 6 + xImpact * 6, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
   // Head and ears
   ctx.fillStyle = '#efe0c8';
-  ctx.strokeStyle = colors.outline;
+  ctx.strokeStyle = catOutlineColor;
   ctx.lineWidth = isLocal ? 2 : 1.5;
   ctx.beginPath(); ctx.arc(0, -12, headR, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   const earDrop = dodgePulse * 3.4;
-  ctx.beginPath(); ctx.moveTo(-6, -18); ctx.lineTo(-10, -24 + earDrop); ctx.lineTo(-2, -20 + earDrop * 0.4); ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(6, -18); ctx.lineTo(10, -24 + earDrop); ctx.lineTo(2, -20 + earDrop * 0.4); ctx.closePath(); ctx.fill(); ctx.stroke();
+  const earLift = rageActive ? (3 + ragePulse * 2.2) : 0;
+  ctx.beginPath(); ctx.moveTo(-6, -18); ctx.lineTo(-10, -24 + earDrop - earLift); ctx.lineTo(-2, -20 + earDrop * 0.4 - earLift * 0.5); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(6, -18); ctx.lineTo(10, -24 + earDrop - earLift); ctx.lineTo(2, -20 + earDrop * 0.4 - earLift * 0.5); ctx.closePath(); ctx.fill(); ctx.stroke();
+
+  if (rageActive) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,170,170,0.86)';
+    ctx.lineWidth = 1.1;
+    ctx.globalAlpha = 0.56 + ragePulse * 0.34;
+    for (let i = 0; i < 7; i++) {
+      const ang = -Math.PI * 0.94 + i * (Math.PI * 1.88 / 6);
+      const sx = Math.cos(ang) * (headR - 2);
+      const sy = -12 + Math.sin(ang) * (headR - 2);
+      const tx = Math.cos(ang) * (headR + 3 + ragePulse * 3);
+      const ty = -12 + Math.sin(ang) * (headR + 3 + ragePulse * 3);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 
   // Eyes
-  ctx.fillStyle = '#111'; ctx.beginPath(); ctx.ellipse(-3, -12, 2, 3, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(3, -12, 2, 3, 0, 0, Math.PI * 2); ctx.fill();
-  if (action === 'ultimate') {
+  if (rageActive) {
+    ctx.fillStyle = '#420008';
+    ctx.beginPath();
+    ctx.moveTo(-6.3, -12.8);
+    ctx.lineTo(-1.2, -14.1);
+    ctx.lineTo(-2.8, -10.1);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(6.3, -12.8);
+    ctx.lineTo(1.2, -14.1);
+    ctx.lineTo(2.8, -10.1);
+    ctx.closePath();
+    ctx.fill();
+
     ctx.save();
-    ctx.globalAlpha = 0.62 + ragePulse * 0.28;
-    ctx.shadowBlur = 7 + ragePulse * 7;
+    ctx.globalAlpha = 0.66 + ragePulse * 0.28;
+    ctx.shadowBlur = 8 + ragePulse * 8;
+    ctx.shadowColor = 'rgba(255,96,96,0.94)';
+    ctx.fillStyle = 'rgba(255,118,118,0.98)';
+    ctx.beginPath(); ctx.ellipse(-3.7, -11.9, 1.6 + ragePulse * 0.8, 2 + ragePulse * 0.7, -0.16, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(3.7, -11.9, 1.6 + ragePulse * 0.8, 2 + ragePulse * 0.7, 0.16, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  } else {
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.ellipse(-3, -12, 2, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(3, -12, 2, 3, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  if (rageActive) {
+    ctx.save();
+    ctx.globalAlpha = 0.5 + ragePulse * 0.32;
+    ctx.shadowBlur = 8 + ragePulse * 7;
     ctx.shadowColor = 'rgba(255,96,96,0.92)';
-    ctx.fillStyle = 'rgba(255,122,122,0.95)';
-    ctx.beginPath(); ctx.ellipse(-3, -12, 1.5 + ragePulse * 0.8, 2.4 + ragePulse * 0.8, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(3, -12, 1.5 + ragePulse * 0.8, 2.4 + ragePulse * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,168,168,0.95)';
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.arc(0, -11.2, 8 + ragePulse * 2.6, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.restore();
   }
 
   // Nose (small triangle) and whiskers
-  ctx.fillStyle = '#d86969';
+  ctx.fillStyle = rageActive ? '#c74a54' : '#d86969';
   ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(-2, -6); ctx.lineTo(2, -6); ctx.closePath(); ctx.fill();
-  ctx.strokeStyle = colors.outline; ctx.lineWidth = 1;
+  ctx.strokeStyle = catOutlineColor; ctx.lineWidth = 1;
   // Whiskers - left
   ctx.beginPath(); ctx.moveTo(-1, -7); ctx.lineTo(-12, -9); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(-1, -6); ctx.lineTo(-12, -6); ctx.stroke();
@@ -408,6 +655,30 @@ export function drawCat(
   ctx.beginPath(); ctx.moveTo(1, -7); ctx.lineTo(12, -9); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(1, -6); ctx.lineTo(12, -6); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(1, -5); ctx.lineTo(12, -3); ctx.stroke();
+
+  if (rageActive) {
+    ctx.strokeStyle = '#2a0609';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-4.2, -3.9);
+    ctx.lineTo(0, -2.8);
+    ctx.lineTo(4.2, -3.9);
+    ctx.stroke();
+
+    ctx.fillStyle = '#f7d9cf';
+    ctx.beginPath();
+    ctx.moveTo(-2.1, -4.2);
+    ctx.lineTo(-1.1, -1.1);
+    ctx.lineTo(-0.2, -4.2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(2.1, -4.2);
+    ctx.lineTo(1.1, -1.1);
+    ctx.lineTo(0.2, -4.2);
+    ctx.closePath();
+    ctx.fill();
+  }
 
   ctx.restore();
 }
@@ -866,18 +1137,19 @@ export function drawMedusa(
 
   if (action === 'special') {
     ctx.save();
-    const aimX = anim?.castTargetOffsetX ?? Math.cos(facingAngle) * 112;
-    const aimY = (anim?.castTargetOffsetY ?? Math.sin(facingAngle) * 112) + 5;
+    const aimX = anim?.castTargetOffsetX ?? Math.cos(facingAngle) * 64;
+    const aimY = (anim?.castTargetOffsetY ?? Math.sin(facingAngle) * 64) + 5;
     const aimMag = Math.hypot(aimX, aimY);
     const fx = aimMag > 0.001 ? aimX / aimMag : Math.cos(facingAngle);
     const fy = aimMag > 0.001 ? aimY / aimMag : Math.sin(facingAngle);
     const rx = -fy;
     const ry = fx;
 
-    const telegraphPhase = Math.min(1, castProgress / 0.68);
-    const centerDist = Math.max(92, Math.min(132, aimMag > 0.001 ? aimMag : 112));
-    const depth = 150 + (1 - telegraphPhase) * 8;
-    const halfWidth = 28 + (1 - telegraphPhase) * 2;
+    const strikeStart = 0.69;
+    const castPhase = Math.min(1, castProgress / strikeStart);
+    const centerDist = Math.max(56, Math.min(94, aimMag > 0.001 ? aimMag : 64));
+    const depth = 104 + (1 - castPhase) * 8;
+    const halfWidth = 30 + (1 - castPhase) * 4;
     const startDist = Math.max(24, centerDist - depth * 0.5);
     const endDist = centerDist + depth * 0.5;
 
@@ -890,8 +1162,8 @@ export function drawMedusa(
     const p4x = fx * startDist + rx * halfWidth * 0.74;
     const p4y = fy * startDist + ry * halfWidth * 0.74;
 
-    ctx.globalAlpha = 0.15 + (1 - telegraphPhase) * 0.2 + specialPulse * 0.16;
-    ctx.fillStyle = 'rgba(82,40,12,0.18)';
+    ctx.globalAlpha = 0.2 + (1 - castPhase) * 0.26 + specialPulse * 0.18;
+    ctx.fillStyle = 'rgba(82,40,12,0.24)';
     ctx.beginPath();
     ctx.moveTo(p1x, p1y);
     ctx.lineTo(p2x, p2y);
@@ -900,9 +1172,9 @@ export function drawMedusa(
     ctx.closePath();
     ctx.fill();
 
-    ctx.globalAlpha = 0.26 + (1 - telegraphPhase) * 0.2 + specialPulse * 0.18;
+    ctx.globalAlpha = 0.34 + (1 - castPhase) * 0.24 + specialPulse * 0.2;
     ctx.strokeStyle = 'rgba(184,255,132,0.92)';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.4;
     ctx.beginPath();
     ctx.moveTo(p1x, p1y);
     ctx.lineTo(p2x, p2y);
@@ -913,62 +1185,145 @@ export function drawMedusa(
 
     ctx.setLineDash([6, 6]);
     ctx.strokeStyle = 'rgba(226,255,186,0.75)';
-    ctx.lineWidth = 1.3;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(fx * (startDist + 12), fy * (startDist + 12));
     ctx.lineTo(fx * (endDist - 6), fy * (endDist - 6));
     ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(fx * (startDist + 12) + rx * 10, fy * (startDist + 12) + ry * 10);
+    ctx.lineTo(fx * (endDist - 14) + rx * 16, fy * (endDist - 14) + ry * 16);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(fx * (startDist + 12) - rx * 10, fy * (startDist + 12) - ry * 10);
+    ctx.lineTo(fx * (endDist - 14) - rx * 16, fy * (endDist - 14) - ry * 16);
+    ctx.stroke();
     ctx.setLineDash([]);
 
-    if (castProgress >= 0.68) {
-      const strikePhase = Math.max(0, Math.min(1, (castProgress - 0.68) / 0.32));
-      const emerge = Math.min(1, strikePhase * 2.4);
-      const retreat = Math.max(0, Math.min(1, (strikePhase - 0.28) / 0.72));
-      const lift = Math.max(0, emerge * (1 - retreat * 0.92));
+    ctx.globalAlpha = 0.24 + castPhase * 0.24 + specialPulse * 0.2;
+    ctx.strokeStyle = 'rgba(210,255,168,0.95)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 24 + castPhase * 10, 0, Math.PI * 2);
+    ctx.stroke();
+
+    for (let i = 0; i < 16; i++) {
+      const t = i / 15;
+      const lane = (t - 0.5) * halfWidth * 1.6;
+      const sparkDrift = Math.sin((time || 0) * 0.015 + i * 1.1) * 2.6;
+      const sx = fx * (startDist + 4 + castPhase * 8) + rx * lane;
+      const sy = fy * (startDist + 4 + castPhase * 8) + ry * lane;
+      const ex = sx + fx * (10 + castPhase * 12) + rx * sparkDrift;
+      const ey = sy + fy * (10 + castPhase * 12) + ry * sparkDrift;
+      ctx.globalAlpha = 0.16 + castPhase * 0.28;
+      ctx.strokeStyle = 'rgba(200,255,150,0.86)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+    }
+
+    if (castProgress >= strikeStart) {
+      const strikePhase = Math.max(0, Math.min(1, (castProgress - strikeStart) / (1 - strikeStart)));
+      const emerge = Math.min(1, strikePhase * 2.25);
+      const retreat = Math.max(0, Math.min(1, (strikePhase - 0.34) / 0.66));
+      const lift = Math.max(0, emerge * (1 - retreat * 0.9));
       const snakePalette = ['#4aa63b', '#7ef07a', '#9bff7a', '#d6ff9a', '#7ad160'];
-      const snakeCount = 9;
+      const snakeCount = 144;
+
+      const impactFlash = Math.max(0, 1 - Math.abs(strikePhase - 0.15) / 0.15);
+      if (impactFlash > 0.02) {
+        ctx.globalAlpha = 0.2 + impactFlash * 0.35;
+        ctx.fillStyle = 'rgba(210,255,170,0.75)';
+        ctx.beginPath();
+        ctx.ellipse(
+          fx * (startDist + depth * 0.42),
+          fy * (startDist + depth * 0.42),
+          halfWidth * (0.95 + impactFlash * 0.6),
+          18 + impactFlash * 10,
+          Math.atan2(fy, fx),
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+      }
 
       for (let i = 0; i < snakeCount; i++) {
         const t = snakeCount <= 1 ? 0.5 : i / (snakeCount - 1);
-        const lateral = (t - 0.5) * (halfWidth * 1.7) + Math.sin((time || 0) * 0.012 + i * 1.1) * 2.2;
-        const depthT = 0.18 + ((i % 3) / 2) * 0.68;
+        const lateral = (t - 0.5) * (halfWidth * 2.1) + Math.sin((time || 0) * 0.012 + i * 0.9) * 3;
+        const depthT = 0.08 + ((i % 7) / 6) * 0.86;
         const forward = startDist + depth * depthT;
         const sx = fx * forward + rx * lateral;
-        const sy = fy * forward + ry * lateral + 6;
-        const rise = 4 + lift * (20 + (i % 3) * 6);
-        const wiggle = Math.sin((time || 0) * 0.02 + i * 0.8) * (2.4 + lift * 2.4);
+        const sy = fy * forward + ry * lateral + 8;
 
-        const tipX = sx + fx * (4 + lift * 9) + rx * wiggle;
-        const tipY = sy - rise + fy * (4 + lift * 9);
+        const snakeLen = 18 + (i % 5) * 3 + lift * 20;
+        const segments = 9;
+        const phase = (time || 0) * 0.017 + variant * 0.55 + i * 0.73 + strikePhase * 7;
+        const points: { x: number; y: number }[] = [];
+        points.push({ x: sx, y: sy });
+        for (let s = 1; s <= segments; s++) {
+          const u = s / segments;
+          const along = u * snakeLen;
+          const wobbleA = Math.sin(phase + u * Math.PI * 2.2) * (1.8 + u * 6.4);
+          const wobbleB = Math.cos(phase * 1.13 + u * 4.2) * (1.2 + u * 3.2);
+          const px = sx + fx * along + rx * wobbleA;
+          const py = sy + fy * along + ry * wobbleB - lift * (8 + u * 16);
+          points.push({ x: px, y: py });
+        }
 
-        ctx.strokeStyle = 'rgba(60,28,10,0.56)';
-        ctx.lineWidth = 3.6;
+        ctx.strokeStyle = 'rgba(60,28,10,0.64)';
+        ctx.lineWidth = 4.2;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(sx, sy + 2);
-        ctx.quadraticCurveTo(sx + rx * wiggle * 0.6, sy - rise * 0.54, tipX, tipY);
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let p = 1; p < points.length; p++) ctx.lineTo(points[p].x, points[p].y);
         ctx.stroke();
 
         const snakeColor = snakePalette[i % snakePalette.length];
         ctx.strokeStyle = snakeColor;
-        ctx.lineWidth = 2.1;
+        ctx.lineWidth = 2.4;
         ctx.beginPath();
-        ctx.moveTo(sx, sy + 1);
-        ctx.quadraticCurveTo(sx + rx * wiggle * 0.5, sy - rise * 0.5, tipX, tipY);
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let p = 1; p < points.length; p++) ctx.lineTo(points[p].x, points[p].y);
         ctx.stroke();
 
-        ctx.fillStyle = snakeColor;
-        ctx.beginPath();
-        ctx.ellipse(tipX, tipY, 2.4, 1.9, 0, 0, Math.PI * 2);
-        ctx.fill();
+        const tip = points[points.length - 1];
+        const prev = points[points.length - 2] ?? tip;
+        const headAng = Math.atan2(tip.y - prev.y, tip.x - prev.x);
 
-        const tongueLen = 2 + lift * 2.8;
+        ctx.beginPath();
+        ctx.ellipse(tip.x, tip.y, 3.6, 2.8, 0, 0, Math.PI * 2);
+        ctx.fillStyle = snakeColor;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(55,24,10,0.74)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+
+        ctx.save();
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = 'rgba(255,200,120,0.9)';
+        ctx.fillStyle = 'rgba(255,246,208,0.96)';
+        ctx.beginPath();
+        ctx.arc(tip.x + Math.cos(headAng) * 1.1, tip.y + Math.sin(headAng) * 1.1, 0.95, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        const tongueLen = 2.5 + lift * 2.8;
         ctx.strokeStyle = 'rgba(255,110,140,0.92)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(tipX, tipY);
-        ctx.lineTo(tipX + fx * tongueLen + rx * 1.1, tipY + fy * tongueLen + ry * 1.1);
-        ctx.moveTo(tipX, tipY);
-        ctx.lineTo(tipX + fx * tongueLen - rx * 1.1, tipY + fy * tongueLen - ry * 1.1);
+        ctx.moveTo(tip.x, tip.y);
+        ctx.lineTo(
+          tip.x + Math.cos(headAng + 0.28) * tongueLen,
+          tip.y + Math.sin(headAng + 0.28) * tongueLen
+        );
+        ctx.moveTo(tip.x, tip.y);
+        ctx.lineTo(
+          tip.x + Math.cos(headAng - 0.28) * tongueLen,
+          tip.y + Math.sin(headAng - 0.28) * tongueLen
+        );
         ctx.stroke();
       }
     }
@@ -981,8 +1336,8 @@ export function drawMedusa(
     ctx.rotate(facingAngle);
     ctx.globalAlpha = 0.22 + ultimatePulse * 0.38;
     ctx.fillStyle = 'rgba(184,232,130,0.32)';
-    const coneRange = 208 + ultimatePulse * 20;
-    const coneHalfHeight = 104 + ultimatePulse * 8;
+    const coneRange = 220;
+    const coneHalfHeight = 110;
     ctx.beginPath();
     ctx.moveTo(0, -2);
     ctx.lineTo(coneRange, -coneHalfHeight);
@@ -1181,8 +1536,26 @@ export function drawSphynx(
   const dodgePulse = action === 'dodge' ? (0.62 + Math.abs(Math.sin((time || 0) * 0.032 + variant * 0.7)) * 0.38) : 0;
   const specialPulse = action === 'special' ? (0.5 + Math.sin((time || 0) * 0.018 + variant * 0.4) * 0.5) : 0;
   const ultimatePulse = action === 'ultimate' ? (0.5 + Math.sin((time || 0) * 0.022 + variant * 0.3) * 0.5) : 0;
+  const armorActive = Boolean(anim?.sphynxArmorActive) || (anim?.sphynxArmorRemainingMs ?? 0) > 0;
+  const armorPulse = armorActive ? (0.5 + Math.sin((time || 0) * 0.02 + variant * 0.55) * 0.5) : 0;
   const stride = attackPulse * 3.8 + dodgePulse * 5.8;
   ctx.translate(Math.cos(facingAngle) * stride, bob + Math.sin(facingAngle) * stride * 0.45 - dodgePulse * 1.2);
+
+  if (armorActive) {
+    ctx.save();
+    ctx.globalAlpha = 0.24 + armorPulse * 0.28;
+    ctx.strokeStyle = 'rgba(255,214,124,0.94)';
+    ctx.lineWidth = 2.1;
+    ctx.beginPath();
+    ctx.ellipse(0, 5, 31 + armorPulse * 3.8, 16 + armorPulse * 2.8, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,242,186,0.86)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.ellipse(0, 5, 23 + armorPulse * 2.8, 12 + armorPulse * 2, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
 
   if (action === 'special') {
     ctx.save();
@@ -1239,7 +1612,7 @@ export function drawSphynx(
   ctx.lineWidth = isLocal ? 2 : 1.5;
 
   // Headdress (Nemes-style) behind the head
-  const gold = '#e1c57f';
+  const gold = armorActive ? '#f4d887' : '#e1c57f';
   const headdressPulse = 1 + specialPulse * 0.08 + ultimatePulse * 0.1;
   ctx.beginPath();
   ctx.moveTo(-18 * headdressPulse, -24);
@@ -1248,7 +1621,29 @@ export function drawSphynx(
   ctx.closePath();
   ctx.fillStyle = gold; ctx.fill(); ctx.stroke();
   // central stripe on the headdress
-  ctx.fillStyle = colors.outline; ctx.fillRect(-4, -24, 8, 24);
+  ctx.fillStyle = armorActive ? '#6a4a17' : colors.outline;
+  ctx.fillRect(-4, -24, 8, 24);
+
+  if (armorActive) {
+    ctx.save();
+    ctx.globalAlpha = 0.56 + armorPulse * 0.28;
+    ctx.fillStyle = 'rgba(255,238,176,0.82)';
+    ctx.beginPath();
+    ctx.moveTo(-11, -11);
+    ctx.lineTo(-3.8, -15.6);
+    ctx.lineTo(-3.8, -2.2);
+    ctx.lineTo(-11, 1.8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(11, -11);
+    ctx.lineTo(3.8, -15.6);
+    ctx.lineTo(3.8, -2.2);
+    ctx.lineTo(11, 1.8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
 
   // Head (human-like sphinx head, slightly feline)
   ctx.fillStyle = '#efe0c8'; ctx.beginPath(); ctx.ellipse(0, -16, 10, 12, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
@@ -1279,12 +1674,60 @@ export function drawSphynx(
   // Body: broad lion-like torso
   ctx.fillStyle = colors.body; ctx.beginPath(); ctx.ellipse(0, 6, 20, 12, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
 
+  if (armorActive) {
+    ctx.save();
+    ctx.globalAlpha = 0.62 + armorPulse * 0.24;
+    ctx.fillStyle = 'rgba(244,204,104,0.55)';
+    ctx.beginPath();
+    ctx.ellipse(0, 5, 18, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,230,162,0.95)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(-10, 1);
+    ctx.lineTo(10, 1);
+    ctx.moveTo(-8, 6);
+    ctx.lineTo(8, 6);
+    ctx.moveTo(-6, 11);
+    ctx.lineTo(6, 11);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   // Hindquarters (lion haunch)
   ctx.beginPath(); ctx.ellipse(14, 12, 8, 8, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+  if (armorActive) {
+    ctx.save();
+    ctx.globalAlpha = 0.5 + armorPulse * 0.22;
+    ctx.fillStyle = 'rgba(240,196,96,0.5)';
+    ctx.beginPath();
+    ctx.ellipse(14, 12, 6.8, 6.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,224,154,0.9)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(14, 12, 6.4, -0.9, 1.8);
+    ctx.stroke();
+    ctx.restore();
+  }
 
   // Forelegs and paws (front of the torso)
   ctx.fillStyle = '#ead5b0'; ctx.beginPath(); ctx.ellipse(-8, 14, 5, 4, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
   ctx.beginPath(); ctx.ellipse(8, 14, 5, 4, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+  if (armorActive) {
+    ctx.save();
+    ctx.globalAlpha = 0.52 + armorPulse * 0.26;
+    ctx.fillStyle = 'rgba(246,212,118,0.6)';
+    ctx.beginPath();
+    ctx.ellipse(-8, 14, 4.2, 3.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(8, 14, 4.2, 3.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
 
   if (action === 'attack') {
     ctx.save();

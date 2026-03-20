@@ -32,6 +32,7 @@ export class CreepsShowcase {
 
     const designs = ['ghost','bat','cat','vampire','zombie','medusa','sphynx'];
     const displayNames: Record<string,string> = { ghost: 'Ghost', bat:'Bat', cat:'Cat', vampire:'Vampire', zombie:'Zombie', medusa:'Medusa', sphynx:'Sphynx' };
+    const wipDesigns = new Set(['ghost', 'zombie', 'vampire']);
 
     for (let i = 0; i < designs.length; i++) {
       const d = designs[i];
@@ -57,6 +58,14 @@ export class CreepsShowcase {
       label.className = 'label';
       label.textContent = displayNames[d];
       wrapper.appendChild(label);
+
+      if (wipDesigns.has(d)) {
+        wrapper.classList.add('is-wip');
+        const wipBadge = document.createElement('div');
+        wipBadge.className = 'wip-badge';
+        wipBadge.textContent = 'W.I.P.';
+        wrapper.appendChild(wipBadge);
+      }
 
       container.appendChild(wrapper);
 

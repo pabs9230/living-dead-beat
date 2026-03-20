@@ -49,6 +49,9 @@ const MEDUSA_SPECIAL_FRONT_MIN_DISTANCE = 24;
 const MEDUSA_SPECIAL_HALF_WIDTH = 39;
 const MEDUSA_DODGE_TRIGGER_RATIO = 0.52;
 const MEDUSA_ULTIMATE_PETRIFY_MS = 2000;
+const MEDUSA_ULTIMATE_CONE_RANGE = 220;
+const MEDUSA_ULTIMATE_CONE_ARC_DEGREES = 54;
+const PLAYER_DEATH_DECISION_MS = 10000;
 
 const PLAYER_RADIUS = 18;
 const ENEMY_RADIUS = 20;
@@ -438,6 +441,10 @@ export class GameStateManager {
     player.activeCooldowns = player.activeCooldowns || createEmptyCooldowns();
     player.activeStatuses = player.activeStatuses || [];
     player.castState = player.castState ?? null;
+    player.isDead = Boolean(player.isDead);
+    player.deathStartedAtMs = player.deathStartedAtMs || 0;
+    player.deathDeadlineMs = player.deathDeadlineMs || 0;
+    player.pvpEnabled = Boolean(player.pvpEnabled);
     this.state.players[player.id] = player;
     this.state.totalPlayers = Object.keys(this.state.players).length;
     this.sphynxPyramidOrder[player.id] = [];
@@ -459,6 +466,7 @@ export class GameStateManager {
 
       // Avoid spawning on top of other players (simple distance check)
       const tooCloseToPlayer = Object.values(this.state.players).some(p => {
+        if (p.isDead) return false;
         const dx = p.x - x;
         const dy = p.y - y;
         return Math.sqrt(dx * dx + dy * dy) < (PLAYER_HALF_W + 8); // buffer
@@ -495,6 +503,35 @@ export class GameStateManager {
 
   getPlayer(playerId: string): Player | undefined {
     return this.state.players[playerId];
+  }
+
+  private markPlayerDead(player: Player): void {
+    this.stopBatUltimateChannel(player.id, false);
+    player.health = 0;
+    player.action = 'idle';
+    player.activeStatuses = [];
+    player.castState = null;
+    player.isDead = true;
+    player.deathStartedAtMs = Date.now();
+    player.deathDeadlineMs = player.deathStartedAtMs + PLAYER_DEATH_DECISION_MS;
+  }
+
+  reenterPlayer(playerId: string): boolean {
+    const player = this.state.players[playerId];
+    if (!player || !player.isDead) return false;
+    this.respawnPlayer(player);
+    return true;
+  }
+
+  getExpiredDeadPlayerIds(now = Date.now()): string[] {
+    const expired: string[] = [];
+    for (const player of Object.values(this.state.players)) {
+      if (!player.isDead) continue;
+      if (player.deathDeadlineMs > 0 && now >= player.deathDeadlineMs) {
+        expired.push(player.id);
+      }
+    }
+    return expired;
   }
 
   private isCooldownReady(player: Player, slot: AbilitySlot, now: number): boolean {
@@ -544,6 +581,61 @@ export class GameStateManager {
     };
   }
 
+  private computeCatSpecialAirTarget(player: Player, range: number, targetX?: number, targetY?: number): { x: number; y: number } {
+    const maxRange = Math.max(24, range);
+    if (typeof targetX === 'number' && typeof targetY === 'number') {
+      return this.clampTargetToRange(player, maxRange, targetX, targetY);
+    }
+
+    const dir = this.directionFromPlayer(player, targetX, targetY);
+    return {
+      x: Math.max(0, Math.min(WORLD_WIDTH, player.x + dir.x * maxRange)),
+      y: Math.max(0, Math.min(WORLD_HEIGHT, player.y + dir.y * maxRange)),
+    };
+  }
+
+  private resolveCatSpecialVisualTarget(player: Player, range: number, targetX?: number, targetY?: number): { x: number; y: number } {
+    const airTarget = this.computeCatSpecialAirTarget(player, range, targetX, targetY);
+    const aim = this.directionFromPlayer(player, airTarget.x, airTarget.y);
+    const arcCos = Math.cos((120 * Math.PI / 180) / 2);
+
+    let best: { x: number; y: number } | null = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    const consider = (tx: number, ty: number, radiusPad: number) => {
+      const dist = distance(player.x, player.y, tx, ty);
+      if (dist > range + radiusPad) return;
+
+      const safeDist = Math.max(0.001, dist);
+      const dirX = (tx - player.x) / safeDist;
+      const dirY = (ty - player.y) / safeDist;
+      if ((dirX * aim.x + dirY * aim.y) < arcCos) return;
+
+      const score = distanceSq(tx, ty, airTarget.x, airTarget.y) + dist * dist * 0.2;
+      if (score < bestScore) {
+        bestScore = score;
+        best = { x: tx, y: ty };
+      }
+    };
+
+    for (const enemy of Object.values(this.state.enemies)) {
+      consider(enemy.x, enemy.y, ENEMY_RADIUS);
+    }
+    for (const target of Object.values(this.state.players)) {
+      if (target.id === player.id || target.isDead) continue;
+      if (!this.isPvpAllowed(player, target)) continue;
+      consider(target.x, target.y, PLAYER_RADIUS);
+    }
+
+    return best ?? airTarget;
+  }
+
+  private isPvpAllowed(attacker: Player, target: Player): boolean {
+    if (attacker.id === target.id) return false;
+    if (attacker.isDead || target.isDead) return false;
+    return attacker.pvpEnabled && target.pvpEnabled;
+  }
+
   private applyAreaDamage(
     caster: Player,
     centerX: number,
@@ -565,6 +657,8 @@ export class GameStateManager {
 
     for (const target of Object.values(this.state.players)) {
       if (target.id === caster.id) continue;
+      if (target.isDead) continue;
+      if (!this.isPvpAllowed(caster, target)) continue;
       if (distance(centerX, centerY, target.x, target.y) <= radius + PLAYER_RADIUS) {
         this.damagePlayerTarget(target, boostedDamage);
         if (applyBleed) this.tryApplyBleed(caster, target);
@@ -615,6 +709,8 @@ export class GameStateManager {
 
     for (const target of Object.values(this.state.players)) {
       if (target.id === caster.id) continue;
+      if (target.isDead) continue;
+      if (!this.isPvpAllowed(caster, target)) continue;
       if (!canHit(target.x, target.y, PLAYER_RADIUS)) continue;
       this.damagePlayerTarget(target, boostedDamage);
       addOrRefreshStatus(target, {
@@ -667,6 +763,8 @@ export class GameStateManager {
 
     for (const target of Object.values(this.state.players)) {
       if (target.id === caster.id) continue;
+      if (target.isDead) continue;
+      if (!this.isPvpAllowed(caster, target)) continue;
       if (!canHit(target.x, target.y, PLAYER_RADIUS)) continue;
       this.damagePlayerTarget(target, boostedDamage);
       hits++;
@@ -716,12 +814,13 @@ export class GameStateManager {
   }
 
   private damagePlayerTarget(target: Player, amount: number): void {
+    if (target.isDead) return;
     const reduced = hasStatus(target, 'golden_armor') ? Math.ceil(amount / 3) : amount;
     target.health = Math.max(0, target.health - reduced);
     if (reduced > 0 && this.isBatUltimateChanneling(target.id)) {
       this.stopBatUltimateChannel(target.id, true);
     }
-    if (target.health <= 0) this.respawnPlayer(target);
+    if (target.health <= 0) this.markPlayerDead(target);
   }
 
   private damageEnemyTarget(target: Enemy, amount: number): void {
@@ -733,6 +832,7 @@ export class GameStateManager {
   }
 
   private healPlayer(player: Player, amount: number): void {
+    if (player.isDead) return;
     if (amount <= 0) return;
     player.health = Math.min(player.maxHealth, player.health + amount);
   }
@@ -773,6 +873,8 @@ export class GameStateManager {
 
     for (const target of Object.values(this.state.players)) {
       if (target.id === caster.id) continue;
+      if (target.isDead) continue;
+      if (!this.isPvpAllowed(caster, target)) continue;
       if (canHit(target.x, target.y, PLAYER_RADIUS)) {
         this.damagePlayerTarget(target, boostedDamage);
         this.tryApplyBleed(caster, target);
@@ -861,6 +963,8 @@ export class GameStateManager {
     }
     for (const target of Object.values(this.state.players)) {
       if (target.id === player.id) continue;
+      if (target.isDead) continue;
+      if (!this.isPvpAllowed(player, target)) continue;
       const d1 = distance(fromX, fromY, target.x, target.y);
       const d2 = distance(player.x, player.y, target.x, target.y);
       if (d1 + d2 <= segmentLen + threshold) {
@@ -872,6 +976,7 @@ export class GameStateManager {
   tryCastAbility(playerId: string, slot: AbilitySlot, targetX?: number, targetY?: number): boolean {
     const player = this.state.players[playerId];
     if (!player) return false;
+    if (player.isDead) return false;
 
     const kit = CREEP_KITS[player.design];
     const ability = kit.abilities[slot];
@@ -990,9 +1095,35 @@ export class GameStateManager {
             value: 0.66,
           });
         } else if (player.design === 'cat') {
-          // Two-hit slash burst.
-          this.applyMeleeHit(player, Math.max(1, Math.round(player.statDamage * 0.55)), ability.range, now, targetX, targetY, 108);
-          this.applyMeleeHit(player, Math.max(1, Math.round(player.statDamage * 0.55)), ability.range, now, targetX, targetY, 122);
+          // Two-hit slash burst; visual target locks to hit target in short range,
+          // otherwise it is thrown to air at short range.
+          const specialTarget = this.resolveCatSpecialVisualTarget(player, ability.range, targetX, targetY);
+          this.applyMeleeHit(
+            player,
+            Math.max(1, Math.round(player.statDamage * 0.55)),
+            ability.range,
+            now,
+            specialTarget.x,
+            specialTarget.y,
+            108
+          );
+          this.applyMeleeHit(
+            player,
+            Math.max(1, Math.round(player.statDamage * 0.55)),
+            ability.range,
+            now,
+            specialTarget.x,
+            specialTarget.y,
+            122
+          );
+          player.castState = {
+            slot: 'special',
+            startedAtMs: now,
+            castDurationMs: ability.castMs,
+            targetX: specialTarget.x,
+            targetY: specialTarget.y,
+          };
+          assignedCastStateInSwitch = true;
         } else if (player.design === 'bat') {
           const center = { x: player.x, y: player.y };
 
@@ -1010,6 +1141,8 @@ export class GameStateManager {
 
           for (const target of Object.values(this.state.players)) {
             if (target.id === player.id) continue;
+            if (target.isDead) continue;
+            if (!this.isPvpAllowed(player, target)) continue;
             const d = distance(center.x, center.y, target.x, target.y);
             if (d > ability.range + PLAYER_RADIUS) continue;
             addOrRefreshStatus(target, {
@@ -1031,7 +1164,7 @@ export class GameStateManager {
           assignedCastStateInSwitch = true;
         } else if (player.design === 'medusa') {
           const facing = this.directionFromPlayer(player, targetX, targetY);
-          const depth = Math.max(140, ability.range);
+          const depth = Math.max(80, ability.range);
           const centerDistance = Math.max(64, depth * 0.56);
           const center = {
             x: Math.max(0, Math.min(WORLD_WIDTH, player.x + facing.x * centerDistance)),
@@ -1077,10 +1210,10 @@ export class GameStateManager {
           this.applyConeDamageAndPetrify(
             player,
             Math.max(1, Math.round(player.statDamage * 3.5)),
-            ability.range,
+            MEDUSA_ULTIMATE_CONE_RANGE,
             targetX,
             targetY,
-            64,
+            MEDUSA_ULTIMATE_CONE_ARC_DEGREES,
             MEDUSA_ULTIMATE_PETRIFY_MS
           );
         } else if (player.design === 'bat') {
@@ -1109,6 +1242,7 @@ export class GameStateManager {
   updatePlayerPosition(playerId: string, x: number, y: number): boolean {
     const player = this.state.players[playerId];
     if (!player) return false;
+    if (player.isDead) return false;
     if (hasStatus(player, 'petrify')) return false;
     if (player.design === 'medusa' && player.castState?.slot === 'dodge') {
       return false;
@@ -1162,6 +1296,7 @@ export class GameStateManager {
   setPlayerAction(playerId: string, action: PlayerAction): boolean {
     const player = this.state.players[playerId];
     if (!player) return false;
+    if (player.isDead) return false;
 
     const now = Date.now();
     if (action === 'attack' || action === 'dodge') {
@@ -1291,11 +1426,14 @@ export class GameStateManager {
     player.action = 'idle';
     player.activeStatuses = [];
     player.castState = null;
+    player.isDead = false;
+    player.deathStartedAtMs = 0;
+    player.deathDeadlineMs = 0;
   }
 
   private updateEnemies(): void {
     const now = Date.now();
-    const players = Object.values(this.state.players);
+    const players = Object.values(this.state.players).filter((p) => !p.isDead);
 
     for (const enemy of Object.values(this.state.enemies)) {
       let closest: Player | undefined;
@@ -1347,7 +1485,17 @@ export class GameStateManager {
         if (cd.expiresAtMs <= now) player.activeCooldowns[slot] = null;
       }
 
+      if (player.isDead) continue;
+
       tickStatuses(player, deltaMs, (status) => {
+        if (status.sourcePlayerId) {
+          const source = this.state.players[status.sourcePlayerId];
+          if (!source || !this.isPvpAllowed(source, player)) {
+            status.remainingMs = 0;
+            return;
+          }
+        }
+
         if (status.kind === 'bleed') {
           const bleedDamage = Math.max(1, Math.round(status.value ?? 1));
           this.damagePlayerTarget(player, bleedDamage);
@@ -1388,6 +1536,7 @@ export class GameStateManager {
 
       const player = this.state.players[dash.playerId];
       if (!player) continue;
+      if (player.isDead) continue;
       const moved = this.dashPlayer(player.id, dash.dashTargetX, dash.dashTargetY, dash.dodgeDistance, true);
       if (moved) {
         this.applyAreaDamage(player, player.x, player.y, 72, Math.max(1, Math.round(player.statDamage * 0.55)));
@@ -1404,6 +1553,7 @@ export class GameStateManager {
 
       const owner = this.state.players[strike.ownerPlayerId];
       if (!owner) continue;
+      if (owner.isDead) continue;
       if (strike.kind === 'medusa_special') {
         this.applyFrontalAreaDamage(
           owner,
@@ -1423,6 +1573,10 @@ export class GameStateManager {
       const owner = this.state.players[playerId];
       if (!owner) {
         delete this.batChannels[playerId];
+        continue;
+      }
+      if (owner.isDead) {
+        this.stopBatUltimateChannel(playerId, false);
         continue;
       }
 
@@ -1453,6 +1607,8 @@ export class GameStateManager {
 
       for (const target of Object.values(this.state.players)) {
         if (target.id === owner.id) continue;
+        if (target.isDead) continue;
+        if (!this.isPvpAllowed(owner, target)) continue;
         if (distance(channel.targetX, channel.targetY, target.x, target.y) > BAT_CHANNEL_RADIUS + PLAYER_RADIUS) continue;
         this.damagePlayerTarget(target, tickDamage);
         totalDamage += tickDamage;
@@ -1470,6 +1626,7 @@ export class GameStateManager {
       }
 
       if (summon.type === 'sphynx_pyramid') {
+        const summonOwner = this.state.players[summon.ownerPlayerId];
         const pullRadius = summon.data?.pullRadius ?? 240;
         const pullStrength = summon.data?.pullStrength ?? 3;
         const missileRadius = summon.data?.missileRadius ?? 180;
@@ -1488,6 +1645,8 @@ export class GameStateManager {
 
         for (const player of Object.values(this.state.players)) {
           if (player.id === summon.ownerPlayerId) continue;
+          if (player.isDead) continue;
+          if (!summonOwner || !this.isPvpAllowed(summonOwner, player)) continue;
           const dist = distance(summon.x, summon.y, player.x, player.y);
           if (dist <= 0.001 || dist > pullRadius) continue;
           const nx = (summon.x - player.x) / dist;
@@ -1515,6 +1674,8 @@ export class GameStateManager {
           let playerDist = Number.POSITIVE_INFINITY;
           for (const player of Object.values(this.state.players)) {
             if (player.id === summon.ownerPlayerId) continue;
+            if (player.isDead) continue;
+            if (!summonOwner || !this.isPvpAllowed(summonOwner, player)) continue;
             const d = distanceSq(summon.x, summon.y, player.x, player.y);
             if (d < playerDist && d <= missileRadius * missileRadius) {
               playerDist = d;
@@ -1547,6 +1708,7 @@ export class GameStateManager {
   dashPlayer(playerId: string, targetX: number, targetY: number, maxDistance = 120, ignoreObstacles = false): boolean {
     const player = this.state.players[playerId];
     if (!player) return false;
+    if (player.isDead) return false;
 
     const DASH_DISTANCE = Math.max(12, maxDistance);
 

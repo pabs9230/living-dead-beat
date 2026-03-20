@@ -82,6 +82,7 @@
       flex: 0 0 auto;
       cursor: pointer;
       user-select: none;
+      position: relative;
       border-radius: 10px;
       transition: transform 0.15s ease, filter 0.15s ease;
     }
@@ -98,6 +99,25 @@
       text-transform:uppercase;
       letter-spacing: 0.8px;
       line-height: 1.1;
+    }
+    .creep.is-wip .label { color: #ffbfd8; }
+    .creep .wip-badge {
+      position: absolute;
+      top: 6px;
+      right: 5px;
+      pointer-events: none;
+      z-index: 2;
+      padding: 2px 7px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 174, 190, 0.78);
+      background: linear-gradient(180deg, rgba(155, 18, 46, 0.94), rgba(68, 6, 22, 0.95));
+      color: #ffe7ef;
+      font-size: 0.58rem;
+      font-weight: 900;
+      letter-spacing: 0.9px;
+      text-transform: uppercase;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.42);
+      text-shadow: 0 1px 0 rgba(0,0,0,0.55);
     }
 
     #creep-controls { display: flex; gap: 10px; align-items: stretch; justify-content: center; flex-wrap: wrap; width: 100%; }
@@ -160,6 +180,97 @@
       /* center child content when shown */
       align-items: center;
       justify-content: center;
+    }
+
+    #game-screen.death-active #game-canvas {
+      filter: grayscale(1) contrast(1.08) brightness(0.86);
+    }
+    #game-screen.death-active #controls-hint,
+    #game-screen.death-active #ability-hud,
+    #game-screen.death-active #touch-controls,
+    #game-screen.death-active #pvp-toggle,
+    #game-screen.death-active #chat-toggle,
+    #game-screen.death-active #chat-container {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #death-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 40;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 42%, rgba(36, 36, 36, 0.24), rgba(8, 8, 8, 0.76));
+      backdrop-filter: blur(1.4px);
+    }
+    #game-screen.death-active #death-overlay {
+      display: flex;
+    }
+    .death-card {
+      width: min(92vw, 430px);
+      padding: 24px 22px 20px 22px;
+      border-radius: 14px;
+      border: 2px solid rgba(255, 186, 196, 0.3);
+      background: linear-gradient(180deg, rgba(28, 28, 28, 0.9), rgba(8, 8, 8, 0.92));
+      box-shadow: 0 16px 42px rgba(0, 0, 0, 0.62);
+      text-align: center;
+      color: #f3e7ea;
+    }
+    .death-title {
+      font-size: clamp(1.35rem, 4.6vw, 2.15rem);
+      letter-spacing: 1.8px;
+      text-transform: uppercase;
+      color: #d8123a;
+      text-shadow: 0 0 14px rgba(255, 174, 192, 0.18);
+      margin-bottom: 12px;
+    }
+    .death-sub {
+      font-size: clamp(0.76rem, 1.9vh, 0.96rem);
+      color: #d8c8cd;
+      margin-bottom: 16px;
+      line-height: 1.35;
+    }
+    .death-countdown {
+      display: inline-block;
+      min-width: 36px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(255, 160, 176, 0.16);
+      border: 1px solid rgba(255, 176, 190, 0.36);
+      color: #ffeef2;
+      font-weight: 900;
+      letter-spacing: 0.8px;
+    }
+    .death-actions {
+      margin-top: 14px;
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .death-btn {
+      border: 1px solid rgba(255, 190, 204, 0.45);
+      border-radius: 8px;
+      padding: 10px 18px;
+      min-width: 130px;
+      font-size: 0.86rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-weight: 800;
+      cursor: pointer;
+      color: #fff3f6;
+      background: linear-gradient(180deg, rgba(160, 28, 58, 0.92), rgba(74, 8, 24, 0.94));
+    }
+    .death-btn.secondary {
+      background: linear-gradient(180deg, rgba(76, 76, 76, 0.88), rgba(28, 28, 28, 0.92));
+      border-color: rgba(212, 212, 212, 0.4);
+      color: #f1f1f1;
+    }
+    .death-btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.64;
     }
 
     #game-canvas {
@@ -414,9 +525,9 @@
     .touch-zone-right {
       right: max(10px, env(safe-area-inset-right));
       display: grid;
-      grid-template-columns: repeat(2, minmax(56px, 72px));
-      grid-template-rows: repeat(2, minmax(56px, 72px));
-      gap: 10px;
+      grid-template-columns: repeat(2, minmax(82px, 104px));
+      grid-template-rows: repeat(2, minmax(82px, 104px));
+      gap: 14px;
       align-content: end;
       justify-content: end;
       pointer-events: auto;
@@ -425,10 +536,11 @@
       width: min(34vw, 152px);
       height: min(34vw, 152px);
       border-radius: 50%;
-      border: 2px solid rgba(250, 190, 212, 0.35);
+      border: 2px solid rgba(255, 116, 138, 0.46);
       background:
-        radial-gradient(circle at 35% 35%, rgba(255, 214, 231, 0.22), rgba(120, 24, 62, 0.2) 48%, rgba(20, 4, 10, 0.52) 100%);
-      box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.45), 0 8px 20px rgba(0, 0, 0, 0.4);
+        radial-gradient(circle at 35% 30%, rgba(255, 112, 140, 0.28), rgba(255, 112, 140, 0) 42%),
+        linear-gradient(165deg, rgba(44, 4, 14, 0.84), rgba(10, 1, 4, 0.92));
+      box-shadow: inset 0 0 26px rgba(0, 0, 0, 0.58), 0 8px 20px rgba(0, 0, 0, 0.45);
       position: relative;
       pointer-events: auto;
       touch-action: none;
@@ -437,8 +549,8 @@
       width: min(16vw, 68px);
       height: min(16vw, 68px);
       border-radius: 50%;
-      background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.3), rgba(253, 131, 180, 0.78) 55%, rgba(122, 14, 56, 0.92));
-      border: 1px solid rgba(255, 216, 230, 0.6);
+      background: radial-gradient(circle at 35% 28%, rgba(255,255,255,0.34), rgba(255, 103, 134, 0.82) 55%, rgba(112, 8, 32, 0.94));
+      border: 1px solid rgba(255, 188, 203, 0.68);
       position: absolute;
       left: 50%;
       top: 50%;
@@ -450,34 +562,169 @@
       pointer-events: none;
     }
     .touch-btn {
+      --aim-x: 0px;
+      --aim-y: 0px;
       pointer-events: auto;
       touch-action: manipulation;
-      border-radius: 16px;
-      border: 1px solid rgba(255, 165, 197, 0.5);
-      background: linear-gradient(180deg, rgba(141, 31, 78, 0.9), rgba(66, 10, 34, 0.94));
+      position: relative;
+      overflow: hidden;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 168, 182, 0.72);
+      background:
+        radial-gradient(circle at 20% 14%, rgba(255, 178, 124, 0.24), rgba(255, 178, 124, 0) 44%),
+        radial-gradient(circle at 74% 78%, rgba(120, 8, 24, 0.52), rgba(120, 8, 24, 0) 46%),
+        linear-gradient(160deg, rgba(58, 8, 16, 0.95), rgba(14, 2, 6, 0.96));
       color: #ffe6f1;
-      font-family: 'Courier New', monospace;
-      font-size: 0.77rem;
-      letter-spacing: 0.5px;
-      min-height: 56px;
-      min-width: 56px;
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+      font-family: 'Trebuchet MS', 'Comic Sans MS', 'Courier New', monospace;
+      min-height: 84px;
+      min-width: 84px;
+      padding: 10px 8px 8px 8px;
+      box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.3), 0 8px 19px rgba(0, 0, 0, 0.58);
+      text-shadow: 0 1px 0 rgba(0, 0, 0, 0.62);
+      transform: translateZ(0);
+      transition: transform 0.08s ease, filter 0.08s ease, border-color 0.14s ease;
+      display: grid;
+      place-items: center;
+      text-align: center;
+    }
+    .touch-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        repeating-linear-gradient(
+          -24deg,
+          rgba(255, 230, 230, 0.11) 0 4px,
+          rgba(255, 255, 255, 0) 4px 13px
+        );
+      mix-blend-mode: screen;
+      opacity: 0.2;
+    }
+    .touch-btn::after {
+      content: '';
+      position: absolute;
+      inset: 8px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 116, 142, 0.22);
+      pointer-events: none;
+      opacity: 0;
+    }
+    .touch-btn-fill {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 0%;
+      pointer-events: none;
+      background: linear-gradient(180deg, rgba(255, 99, 143, 0.08), rgba(54, 10, 27, 0.8));
+      transition: height 0.12s linear;
+    }
+    .touch-btn-slash {
+      position: absolute;
+      top: -12px;
+      right: -30px;
+      width: 86px;
+      height: 24px;
+      transform: rotate(-34deg);
+      background: linear-gradient(180deg, rgba(255, 197, 145, 0.3), rgba(255, 72, 112, 0.14));
+      border: 1px solid rgba(255, 184, 164, 0.34);
+      border-radius: 12px;
+      pointer-events: none;
+      opacity: 0.8;
+    }
+    .touch-btn-key,
+    .touch-btn-label,
+    .touch-btn-cooldown,
+    .touch-btn-aim {
+      position: relative;
+      z-index: 1;
+      pointer-events: none;
+    }
+    .touch-btn-key {
+      display: inline-block;
+      font-size: 0.62rem;
+      font-weight: 900;
+      letter-spacing: 1.2px;
+      color: #ffd5c8;
+      margin-bottom: 2px;
+    }
+    .touch-btn-label {
+      font-size: 0.78rem;
+      font-weight: 900;
+      letter-spacing: 0.7px;
+      color: #ffeef8;
+      line-height: 1;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .touch-btn-cooldown {
+      font-size: 0.66rem;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+      min-height: 13px;
+      color: #98ffb8;
+    }
+    .touch-btn-aim {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 238, 170, 0.72);
+      background: radial-gradient(circle at 34% 30%, rgba(255,255,255,0.9), rgba(255, 130, 140, 0.8));
+      box-shadow: 0 0 8px rgba(255, 122, 144, 0.8);
+      transform: translate(calc(-50% + var(--aim-x)), calc(-50% + var(--aim-y)));
+      opacity: 0;
+      transition: opacity 0.08s ease;
     }
     .touch-btn.pressed {
-      transform: scale(0.95);
-      filter: brightness(1.15);
+      transform: scale(0.96) rotate(-1.1deg);
+      filter: brightness(1.12) saturate(1.1);
+    }
+    .touch-btn.mode-directional-tilt::after,
+    .touch-btn.mode-directional-release::after {
+      opacity: 1;
+      border-color: rgba(255, 126, 146, 0.42);
+    }
+    .touch-btn.mode-tap .touch-btn-aim,
+    .touch-btn.mode-hold .touch-btn-aim {
+      display: none;
+    }
+    .touch-btn.aiming .touch-btn-aim {
+      opacity: 1;
+    }
+    .touch-btn.cooling .touch-btn-cooldown {
+      color: #ffb7cd;
+    }
+    .touch-btn.casting .touch-btn-cooldown {
+      color: #ffe391;
+    }
+    .touch-btn.ready .touch-btn-cooldown {
+      color: #98ffb8;
     }
     .touch-btn-dodge {
-      background: linear-gradient(180deg, rgba(39, 107, 160, 0.96), rgba(18, 44, 89, 0.96));
-      border-color: rgba(147, 215, 255, 0.65);
+      background:
+        radial-gradient(circle at 25% 14%, rgba(255, 178, 178, 0.24), rgba(255, 178, 178, 0) 45%),
+        linear-gradient(164deg, rgba(120, 14, 30, 0.94), rgba(34, 4, 12, 0.96));
+      border-color: rgba(255, 168, 182, 0.74);
     }
     .touch-btn-attack {
-      background: linear-gradient(180deg, rgba(187, 37, 63, 0.95), rgba(103, 11, 31, 0.96));
-      border-color: rgba(255, 160, 175, 0.68);
+      background:
+        radial-gradient(circle at 20% 12%, rgba(255, 206, 120, 0.3), rgba(255, 206, 120, 0) 42%),
+        linear-gradient(164deg, rgba(171, 17, 36, 0.96), rgba(68, 6, 18, 0.98));
+      border-color: rgba(255, 177, 161, 0.82);
+    }
+    .touch-btn-skill {
+      background:
+        radial-gradient(circle at 20% 12%, rgba(255, 152, 132, 0.3), rgba(255, 152, 132, 0) 42%),
+        linear-gradient(164deg, rgba(138, 16, 34, 0.95), rgba(48, 5, 14, 0.97));
+      border-color: rgba(255, 162, 154, 0.8);
     }
     .touch-btn-disabled {
       opacity: 0.72;
-      filter: saturate(0.65);
+      filter: saturate(0.66) brightness(0.92);
     }
     .touch-toast {
       position: absolute;
@@ -499,6 +746,44 @@
     .touch-toast.visible {
       opacity: 1;
       transform: translateX(-50%) translateY(0px);
+    }
+
+    #pvp-toggle {
+      position: absolute;
+      left: 20px;
+      top: 132px;
+      z-index: 26;
+      border: 1px solid rgba(255, 182, 196, 0.52);
+      border-radius: 999px;
+      padding: 9px 16px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.76rem;
+      letter-spacing: 0.8px;
+      color: #ffdfe9;
+      background: linear-gradient(180deg, rgba(68, 12, 28, 0.94), rgba(24, 4, 10, 0.96));
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+      text-transform: uppercase;
+      touch-action: manipulation;
+      transition: transform 0.12s ease, filter 0.12s ease, border-color 0.12s ease;
+    }
+    #pvp-toggle.enabled {
+      background: linear-gradient(180deg, rgba(178, 18, 48, 0.96), rgba(84, 10, 28, 0.98));
+      border-color: rgba(255, 206, 214, 0.78);
+      color: #fff2f5;
+      filter: saturate(1.12);
+    }
+    #pvp-toggle.disabled {
+      background: linear-gradient(180deg, rgba(54, 13, 34, 0.94), rgba(22, 6, 14, 0.96));
+      border-color: rgba(186, 136, 156, 0.52);
+      color: #ffd7e7;
+    }
+    #pvp-toggle:disabled {
+      opacity: 0.66;
+      cursor: not-allowed;
+    }
+    #pvp-toggle:hover:not(:disabled) {
+      transform: translateY(-1px);
+      filter: brightness(1.06);
     }
 
     #chat-toggle {
@@ -540,20 +825,16 @@
       font-size: 0.7rem;
       padding: 8px 10px;
     }
+    #game-screen.touch-ui-active #pvp-toggle {
+      left: max(10px, env(safe-area-inset-left));
+      top: max(82px, calc(env(safe-area-inset-top) + 72px));
+      padding: 10px 14px;
+      font-size: 0.72rem;
+    }
     #game-screen.touch-ui-active #chat-toggle {
       display: block;
     }
-    #game-screen.touch-ui-active #ability-hud {
-      bottom: max(104px, calc(env(safe-area-inset-bottom) + 92px));
-      grid-template-columns: repeat(4, minmax(74px, 86px));
-      gap: 6px;
-    }
-    #game-screen.touch-ui-active .ability-slot {
-      min-height: 58px;
-    }
-    #game-screen.touch-ui-active .ability-slot .slot-key { font-size: 0.58rem; }
-    #game-screen.touch-ui-active .ability-slot .slot-name { font-size: 0.64rem; }
-    #game-screen.touch-ui-active .ability-slot .slot-state { font-size: 0.62rem; }
+    #game-screen.touch-ui-active #ability-hud { display: none; }
     #game-screen.touch-ui-active #chat-container {
       display: none;
       left: 50%;
@@ -571,6 +852,7 @@
     #game-screen.mobile-portrait #stats-hud,
     #game-screen.mobile-portrait #ability-hud,
     #game-screen.mobile-portrait #controls-hint,
+    #game-screen.mobile-portrait #pvp-toggle,
     #game-screen.mobile-portrait #chat-container,
     #game-screen.mobile-portrait #chat-toggle {
       display: none !important;
@@ -634,6 +916,12 @@
         margin-top: 6px;
         font-size: 0.72rem;
       }
+      .creep .wip-badge {
+        top: 5px;
+        right: 4px;
+        font-size: 0.52rem;
+        padding: 1px 6px;
+      }
     }
 
     @media (orientation: landscape) and (max-height: 560px) {
@@ -689,6 +977,7 @@
 
   <div id="game-screen">
     <canvas id="game-canvas"></canvas>
+    <button id="pvp-toggle" type="button" aria-pressed="false">☠ PVP OFF</button>
     <button id="chat-toggle" type="button">Chat</button>
     <div id="hud">Players: <span id="player-count">0</span>/10</div>
     <div id="stats-hud">
@@ -751,6 +1040,19 @@
           <button id="chat-send">Send</button>
         </div>
       </div>
+    <div id="death-overlay" aria-live="polite">
+      <div class="death-card">
+        <div class="death-title">You died...!</div>
+        <div class="death-sub">
+          Shame! Choose in <span id="death-countdown" class="death-countdown">10</span>s
+          or you will be removed from the game.
+        </div>
+        <div class="death-actions">
+          <button id="death-reenter-btn" class="death-btn" type="button">Re-join!</button>
+          <button id="death-exit-btn" class="death-btn secondary" type="button">Exit...</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="/src/main.ts"></script>
