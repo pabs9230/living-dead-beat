@@ -172,10 +172,17 @@ function showGame(playerId: string, client: GameClient, initialState: GameState)
       targetH = maxH;
       targetW = Math.round(targetH * worldAspect);
     }
-    // Set canvas logical resolution and CSS size so it is visually centered
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    canvas.width = Math.round(targetW * dpr);
-    canvas.height = Math.round(targetH * dpr);
+    // Keep visual size, but cap internal render pixels on very large/high-DPI displays.
+    const deviceDpr = Math.max(1, window.devicePixelRatio || 1);
+    const maxRenderPixels = isTouchGame ? 1800000 : 2900000;
+    const desiredPixels = targetW * targetH * deviceDpr * deviceDpr;
+    const renderScale = desiredPixels > maxRenderPixels
+      ? Math.sqrt(maxRenderPixels / Math.max(1, desiredPixels))
+      : 1;
+    const renderDpr = Math.max(0.72, deviceDpr * renderScale);
+
+    canvas.width = Math.max(1, Math.round(targetW * renderDpr));
+    canvas.height = Math.max(1, Math.round(targetH * renderDpr));
     canvas.style.width = `${targetW}px`;
     canvas.style.height = `${targetH}px`;
   }

@@ -41,6 +41,7 @@ interface InterpolatedPlayer {
   facingAngle: number;
   aimAngle: number | null;
   castStartedAtMs: number | null;
+  castObservedLocalStartedAtMs: number | null;
   castDurationMs: number;
   castTargetX: number | null;
   castTargetY: number | null;
@@ -50,6 +51,8 @@ interface InterpolatedPlayer {
   catRageRemainingMs: number;
   isSphynxArmored: boolean;
   sphynxArmorRemainingMs: number;
+  medusaSpecialBurstUntilMs: number;
+  medusaSpecialBurstCastStartedAtMs: number | null;
 }
 
 interface InterpolatedEnemy {
@@ -148,7 +151,7 @@ export class GameRenderer {
   private chatBubbles: Map<string, { text: string; start: number; duration: number; lines?: string[] }> = new Map();
   // ambient particles
   private particles: Array<{ x: number; y: number; vx: number; vy: number; size: number; color: string; alpha: number; phase: number; freq: number }> = [];
-  private PARTICLE_COUNT = 1500;
+  private PARTICLE_COUNT = 900;
   private particleColors = ['#5fb1ff', '#8b5bff', '#2f0b3a', '#0b0610'];
 
   // Offscreen cache for pre-rendered particle sprites (color + quantized size)
@@ -187,7 +190,9 @@ export class GameRenderer {
   // Re-apply DPR transform after any canvas resize/orientation change.
   // Changing canvas width/height resets the 2D context transform to identity.
   syncCanvasMetrics(): void {
-    this.dpr = Math.max(1, window.devicePixelRatio || 1);
+    const rect = this.canvas.getBoundingClientRect();
+    const inferred = rect.width > 0 ? this.canvas.width / rect.width : (window.devicePixelRatio || 1);
+    this.dpr = Math.max(0.6, inferred);
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
 
@@ -297,6 +302,7 @@ export class GameRenderer {
   updateState(state: GameState): void {
     this.obstacles = state.obstacles || [];
     this.visibilityRadius = state.visibilityRadius || VISIBILITY_RADIUS;
+    const nowPerfMs = performance.now();
 
     // Update interpolation targets
     Object.keys(state.players).forEach((id) => {
@@ -326,7 +332,11 @@ export class GameRenderer {
         interp.catRageRemainingMs = catRageRemainingMs;
         interp.isSphynxArmored = sphynxArmorRemainingMs > 0;
         interp.sphynxArmorRemainingMs = sphynxArmorRemainingMs;
-        interp.castStartedAtMs = player.castState?.startedAtMs ?? null;
+        const incomingCastStartedAtMs = player.castState?.startedAtMs ?? null;
+        if (incomingCastStartedAtMs !== interp.castStartedAtMs) {
+          interp.castObservedLocalStartedAtMs = incomingCastStartedAtMs !== null ? nowPerfMs : null;
+        }
+        interp.castStartedAtMs = incomingCastStartedAtMs;
         interp.castDurationMs = player.castState?.castDurationMs ?? 0;
         if (typeof player.castState?.targetX === 'number' && typeof player.castState?.targetY === 'number') {
           const dx = player.castState.targetX - player.x;
@@ -344,11 +354,31 @@ export class GameRenderer {
           interp.castTargetX = null;
           interp.castTargetY = null;
         }
+
+        if (
+          player.design === 'medusa' &&
+          player.action === 'special' &&
+          typeof interp.castStartedAtMs === 'number' &&
+          interp.castObservedLocalStartedAtMs !== null &&
+          interp.castDurationMs > 0
+        ) {
+          const specialProgress = Math.max(
+            0,
+            Math.min(1, (nowPerfMs - interp.castObservedLocalStartedAtMs) / Math.max(1, interp.castDurationMs))
+          );
+          if (specialProgress >= 0.5 && interp.medusaSpecialBurstCastStartedAtMs !== interp.castStartedAtMs) {
+            interp.medusaSpecialBurstCastStartedAtMs = interp.castStartedAtMs;
+            interp.medusaSpecialBurstUntilMs = nowPerfMs + 520;
+          }
+        }
+
         const damage = Math.max(0, prevHealth - player.health);
         if (damage >= 1) {
           this.spawnDamageBurst(player.x, player.y - 24, damage, 'player');
         }
       } else {
+        const medusaCastStartedAtMs = player.design === 'medusa' ? (player.castState?.startedAtMs ?? null) : null;
+        const medusaInitialBurstActive = player.design === 'medusa' && player.action === 'special' && medusaCastStartedAtMs !== null;
         this.interpolated.set(id, {
           currentX: player.x,
           currentY: player.y,
@@ -371,6 +401,7 @@ export class GameRenderer {
           facingAngle: 0,
           aimAngle: null,
           castStartedAtMs: player.castState?.startedAtMs ?? null,
+          castObservedLocalStartedAtMs: player.castState?.startedAtMs ? nowPerfMs : null,
           castDurationMs: player.castState?.castDurationMs ?? 0,
           castTargetX: typeof player.castState?.targetX === 'number' ? player.castState.targetX : null,
           castTargetY: typeof player.castState?.targetY === 'number' ? player.castState.targetY : null,
@@ -380,6 +411,8 @@ export class GameRenderer {
           catRageRemainingMs,
           isSphynxArmored: sphynxArmorRemainingMs > 0,
           sphynxArmorRemainingMs,
+          medusaSpecialBurstUntilMs: medusaInitialBurstActive ? nowPerfMs + 520 : 0,
+          medusaSpecialBurstCastStartedAtMs: medusaInitialBurstActive ? medusaCastStartedAtMs : null,
         });
       }
     });
@@ -570,9 +603,14 @@ export class GameRenderer {
     return spr;
   }
 
-  private updateAndDrawParticles(ctx: CanvasRenderingContext2D, dt: number): void {
+  private updateAndDrawParticles(ctx: CanvasRenderingContext2D, dt: number, camX: number, camY: number, vw: number, vh: number): void {
     if (!this.particles || this.particles.length === 0) return;
     const dtSec = Math.max(0.001, dt / 1000);
+    const margin = 42;
+    const minX = camX - margin;
+    const maxX = camX + vw + margin;
+    const minY = camY - margin;
+    const maxY = camY + vh + margin;
 
     // particles are in world coordinates; we're already translated by -cam.x/-cam.y
     for (let i = 0; i < this.particles.length; i++) {
@@ -589,6 +627,10 @@ export class GameRenderer {
       if (p.x > WORLD_WIDTH) p.x -= WORLD_WIDTH;
       if (p.y < 0) p.y += WORLD_HEIGHT;
       if (p.y > WORLD_HEIGHT) p.y -= WORLD_HEIGHT;
+
+      if (p.x < minX || p.x > maxX || p.y < minY || p.y > maxY) {
+        continue;
+      }
 
       // draw using a pre-rendered sprite (much faster than calling shadowBlur per-particle)
       const sprite = this.getParticleSprite(p.color, p.size);
@@ -649,6 +691,14 @@ export class GameRenderer {
     this.time = timestamp;
     const dt = timestamp - this.lastTime;
     this.lastTime = timestamp;
+    const smoothDt = Math.max(0, Math.min(90, dt));
+    const playerPosAlpha = Math.min(0.42, 1 - Math.exp(-smoothDt / 88));
+    const playerVisibilityAlpha = Math.min(0.36, 1 - Math.exp(-smoothDt / 106));
+    const enemyPosAlpha = Math.min(0.38, 1 - Math.exp(-smoothDt / 98));
+    const enemyVisibilityAlpha = Math.min(0.34, 1 - Math.exp(-smoothDt / 112));
+    const summonPosAlpha = Math.min(0.46, 1 - Math.exp(-smoothDt / 72));
+    const summonVisibilityAlpha = Math.min(0.4, 1 - Math.exp(-smoothDt / 80));
+    const deathVisibilityAlpha = Math.min(0.48, 1 - Math.exp(-smoothDt / 66));
 
     // Keep transform in sync in case canvas size changed since last frame.
     this.syncCanvasMetrics();
@@ -662,10 +712,9 @@ export class GameRenderer {
 
     // Smooth-interpolate all players first (needed for camera)
     for (const interp of this.interpolated.values()) {
-      const alpha = 0.2;
-      interp.currentX += (interp.targetX - interp.currentX) * alpha;
-      interp.currentY += (interp.targetY - interp.currentY) * alpha;
-      interp.visibilityAlpha += (interp.targetVisibility - interp.visibilityAlpha) * 0.22;
+      interp.currentX += (interp.targetX - interp.currentX) * playerPosAlpha;
+      interp.currentY += (interp.targetY - interp.currentY) * playerPosAlpha;
+      interp.visibilityAlpha += (interp.targetVisibility - interp.visibilityAlpha) * playerVisibilityAlpha;
       const faceDX = interp.targetX - interp.currentX;
       const faceDY = interp.targetY - interp.currentY;
       if (Math.hypot(faceDX, faceDY) > 0.2) {
@@ -687,13 +736,13 @@ export class GameRenderer {
         const deathProgress = Math.max(0, Math.min(1, (timestamp - enemy.deathStartedAtMs) / Math.max(1, enemy.deathDurationMs)));
         enemy.targetVisibility = deathProgress >= 1 ? 0 : 1;
         const deathVisibility = Math.max(0, 1 - deathProgress * 1.08);
-        enemy.visibilityAlpha += (deathVisibility - enemy.visibilityAlpha) * 0.28;
+        enemy.visibilityAlpha += (deathVisibility - enemy.visibilityAlpha) * deathVisibilityAlpha;
         continue;
       }
 
-      enemy.currentX += (enemy.targetX - enemy.currentX) * 0.16;
-      enemy.currentY += (enemy.targetY - enemy.currentY) * 0.16;
-      enemy.visibilityAlpha += (enemy.targetVisibility - enemy.visibilityAlpha) * 0.2;
+      enemy.currentX += (enemy.targetX - enemy.currentX) * enemyPosAlpha;
+      enemy.currentY += (enemy.targetY - enemy.currentY) * enemyPosAlpha;
+      enemy.visibilityAlpha += (enemy.targetVisibility - enemy.visibilityAlpha) * enemyVisibilityAlpha;
       const headingDX = enemy.targetX - enemy.currentX;
       const headingDY = enemy.targetY - enemy.currentY;
       if (Math.hypot(headingDX, headingDY) > 0.2) {
@@ -702,9 +751,9 @@ export class GameRenderer {
     }
 
     for (const summon of this.interpolatedSummons.values()) {
-      summon.currentX += (summon.targetX - summon.currentX) * 0.24;
-      summon.currentY += (summon.targetY - summon.currentY) * 0.24;
-      summon.visibilityAlpha += (summon.targetVisibility - summon.visibilityAlpha) * 0.25;
+      summon.currentX += (summon.targetX - summon.currentX) * summonPosAlpha;
+      summon.currentY += (summon.targetY - summon.currentY) * summonPosAlpha;
+      summon.visibilityAlpha += (summon.targetVisibility - summon.visibilityAlpha) * summonVisibilityAlpha;
     }
 
     const viewWidth = Math.round(width / this.viewScale);
@@ -719,7 +768,7 @@ export class GameRenderer {
     this.drawGround(ctx, cam.x, cam.y, viewWidth, viewHeight);
 
     // Ambient particles (above ground, below obstacles/players)
-    this.updateAndDrawParticles(ctx, dt);
+    this.updateAndDrawParticles(ctx, dt, cam.x, cam.y, viewWidth, viewHeight);
 
     // Draw obstacles
     for (const obs of this.obstacles) {
@@ -1693,8 +1742,8 @@ export class GameRenderer {
       action: interp.action,
       animFrame: interp.animFrame,
       facingAngle,
-      castProgress: (interp.castStartedAtMs && interp.castDurationMs > 0)
-        ? Math.max(0, Math.min(1, (Date.now() - interp.castStartedAtMs) / interp.castDurationMs))
+      castProgress: (interp.castObservedLocalStartedAtMs !== null && interp.castDurationMs > 0)
+        ? Math.max(0, Math.min(1, (this.time - interp.castObservedLocalStartedAtMs) / interp.castDurationMs))
         : 0,
       castTargetOffsetX: typeof interp.castTargetX === 'number' ? (interp.castTargetX - x) : undefined,
       castTargetOffsetY: typeof interp.castTargetY === 'number' ? (interp.castTargetY - y) : undefined,
@@ -1702,6 +1751,8 @@ export class GameRenderer {
       catRageRemainingMs: interp.catRageRemainingMs,
       sphynxArmorActive: interp.isSphynxArmored,
       sphynxArmorRemainingMs: interp.sphynxArmorRemainingMs,
+      medusaStrikeBurstActive: interp.medusaSpecialBurstUntilMs > this.time,
+      medusaStrikeBurstStrength: Math.max(0, Math.min(1, (interp.medusaSpecialBurstUntilMs - this.time) / 520)),
     };
 
     switch (design) {

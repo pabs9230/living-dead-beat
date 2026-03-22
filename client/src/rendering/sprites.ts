@@ -12,6 +12,8 @@ export interface SpriteAnimationState {
   catRageRemainingMs?: number;
   sphynxArmorActive?: boolean;
   sphynxArmorRemainingMs?: number;
+  medusaStrikeBurstActive?: boolean;
+  medusaStrikeBurstStrength?: number;
 }
 
 const BAT_SPECIAL_AREA_RADIUS = 1760;
@@ -500,72 +502,105 @@ export function drawCat(
 
     ctx.save();
 
+    const drawSavageSlashX = (
+      cx: number,
+      cy: number,
+      power: number,
+      mainColor: string,
+      glowColor: string,
+      seedShift: number
+    ) => {
+      const len = 12 + power * 10;
+      const jitter = Math.sin((time || 0) * 0.045 + variant * 0.8 + seedShift) * (1.4 + power * 1.8);
+
+      ctx.globalAlpha = 0.34 + power * 0.62;
+      ctx.strokeStyle = mainColor;
+      ctx.lineWidth = 2.6 + power * 2.8;
+      ctx.beginPath();
+      ctx.moveTo(cx - len - jitter * 0.5, cy - len + jitter);
+      ctx.lineTo(cx + len + jitter, cy + len - jitter * 0.6);
+      ctx.moveTo(cx - len + jitter * 0.6, cy + len + jitter * 0.4);
+      ctx.lineTo(cx + len - jitter, cy - len - jitter * 0.7);
+      ctx.stroke();
+
+      ctx.globalAlpha = 0.24 + power * 0.3;
+      ctx.strokeStyle = glowColor;
+      ctx.lineWidth = 1.2 + power * 1.2;
+      ctx.beginPath();
+      ctx.moveTo(cx - len * 0.72, cy - len * 0.72);
+      ctx.lineTo(cx + len * 0.72, cy + len * 0.72);
+      ctx.moveTo(cx - len * 0.72, cy + len * 0.72);
+      ctx.lineTo(cx + len * 0.72, cy - len * 0.72);
+      ctx.stroke();
+
+      ctx.globalAlpha = 0.2 + power * 0.44;
+      ctx.strokeStyle = 'rgba(74, 6, 10, 0.92)';
+      ctx.lineWidth = 1.1 + power * 1.1;
+      for (let i = 0; i < 3; i++) {
+        const ang = (seedShift * 0.7) + i * (Math.PI * 2 / 3);
+        const scarLen = 5 + power * 5;
+        const sx = cx + Math.cos(ang) * (3 + power * 2);
+        const sy = cy + Math.sin(ang) * (3 + power * 2);
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + Math.cos(ang + 0.45) * scarLen, sy + Math.sin(ang + 0.45) * scarLen);
+        ctx.stroke();
+      }
+
+      ctx.globalAlpha = 0.2 + power * 0.3;
+      for (let i = 0; i < 7; i++) {
+        const ang = seedShift + i * 0.9;
+        const r = 4 + power * (3 + (i % 3));
+        const px = cx + Math.cos(ang) * r;
+        const py = cy + Math.sin(ang) * (r * 0.78);
+        const dot = 0.9 + ((i + 1) % 3) * 0.85 + power * 1.1;
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(158, 16, 24, 0.9)' : 'rgba(108, 8, 14, 0.85)';
+        ctx.beginPath();
+        ctx.ellipse(px, py, dot, dot * 0.75, ang * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+
     if (strikeA > 0.01) {
       const cx = tx + perpX * 6;
       const cy = ty + perpY * 6;
-      const len = 12 + strikeA * 9;
-      ctx.globalAlpha = 0.28 + strikeA * 0.7;
-      ctx.strokeStyle = 'rgba(255,124,126,0.98)';
-      ctx.lineWidth = 2.2 + strikeA * 2.1;
-      ctx.beginPath();
-      ctx.moveTo(cx - len, cy - len);
-      ctx.lineTo(cx + len, cy + len);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(cx - len, cy + len);
-      ctx.lineTo(cx + len, cy - len);
-      ctx.stroke();
-
-      ctx.globalAlpha = 0.18 + strikeA * 0.22;
-      ctx.strokeStyle = 'rgba(255,204,190,0.9)';
-      ctx.lineWidth = 1.1 + strikeA;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 8 + strikeA * 8, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.fillStyle = `rgba(255,170,170,${(0.36 + strikeA * 0.4).toFixed(3)})`;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, 3.1 + strikeA * 2, 2.1 + strikeA * 1.2, 0, 0, Math.PI * 2);
-      ctx.fill();
+      drawSavageSlashX(
+        cx,
+        cy,
+        strikeA,
+        'rgba(186, 18, 28, 0.98)',
+        'rgba(255, 132, 124, 0.82)',
+        0.24
+      );
     }
 
     if (strikeB > 0.01) {
       const cx = tx - perpX * 6;
       const cy = ty - perpY * 6;
-      const len = 12 + strikeB * 9;
-      ctx.globalAlpha = 0.28 + strikeB * 0.7;
-      ctx.strokeStyle = 'rgba(255,214,166,0.97)';
-      ctx.lineWidth = 2.2 + strikeB * 2.1;
-      ctx.beginPath();
-      ctx.moveTo(cx - len, cy - len);
-      ctx.lineTo(cx + len, cy + len);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(cx - len, cy + len);
-      ctx.lineTo(cx + len, cy - len);
-      ctx.stroke();
-
-      ctx.globalAlpha = 0.18 + strikeB * 0.22;
-      ctx.strokeStyle = 'rgba(255,230,190,0.9)';
-      ctx.lineWidth = 1.1 + strikeB;
-      ctx.beginPath();
-      ctx.arc(cx, cy, 8 + strikeB * 8, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.fillStyle = `rgba(255,226,180,${(0.36 + strikeB * 0.4).toFixed(3)})`;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, 3.1 + strikeB * 2, 2.1 + strikeB * 1.2, 0, 0, Math.PI * 2);
-      ctx.fill();
+      drawSavageSlashX(
+        cx,
+        cy,
+        strikeB,
+        'rgba(138, 10, 18, 0.98)',
+        'rgba(255, 104, 104, 0.8)',
+        1.36
+      );
     }
 
     const xImpact = Math.max(0, 1 - Math.abs(strikeCycle - 0.5) / 0.22);
     if (xImpact > 0.02) {
-      ctx.globalAlpha = 0.16 + xImpact * 0.24;
-      ctx.strokeStyle = 'rgba(255,230,194,0.9)';
-      ctx.lineWidth = 1.3 + xImpact * 1.6;
+      ctx.globalAlpha = 0.22 + xImpact * 0.3;
+      ctx.strokeStyle = 'rgba(112, 12, 18, 0.92)';
+      ctx.lineWidth = 1.6 + xImpact * 1.9;
       ctx.beginPath();
       ctx.arc(tx, ty, 6 + xImpact * 6, 0, Math.PI * 2);
       ctx.stroke();
+
+      ctx.globalAlpha = 0.15 + xImpact * 0.28;
+      ctx.fillStyle = 'rgba(170, 18, 26, 0.74)';
+      ctx.beginPath();
+      ctx.ellipse(tx, ty, 4.4 + xImpact * 4, 3 + xImpact * 2.8, 0, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     ctx.restore();
@@ -1137,6 +1172,18 @@ export function drawMedusa(
 
   if (action === 'special') {
     ctx.save();
+    const isCompactScreen = Boolean(
+      (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0)
+      || (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+      || (typeof window !== 'undefined' && window.innerWidth <= 960)
+    );
+    const nav = typeof navigator !== 'undefined' ? (navigator as any) : null;
+    const isLowEndMobile = Boolean(
+      isCompactScreen && (
+        (typeof nav?.deviceMemory === 'number' && nav.deviceMemory <= 4)
+        || (typeof nav?.hardwareConcurrency === 'number' && nav.hardwareConcurrency <= 6)
+      )
+    );
     const aimX = anim?.castTargetOffsetX ?? Math.cos(facingAngle) * 64;
     const aimY = (anim?.castTargetOffsetY ?? Math.sin(facingAngle) * 64) + 5;
     const aimMag = Math.hypot(aimX, aimY);
@@ -1145,8 +1192,8 @@ export function drawMedusa(
     const rx = -fy;
     const ry = fx;
 
-    const strikeStart = 0.69;
-    const castPhase = Math.min(1, castProgress / strikeStart);
+    const telegraphPeak = isCompactScreen ? 0.74 : 0.84;
+    const castPhase = Math.min(1, castProgress / telegraphPeak);
     const centerDist = Math.max(56, Math.min(94, aimMag > 0.001 ? aimMag : 64));
     const depth = 104 + (1 - castPhase) * 8;
     const halfWidth = 30 + (1 - castPhase) * 4;
@@ -1224,15 +1271,21 @@ export function drawMedusa(
       ctx.stroke();
     }
 
-    if (castProgress >= strikeStart) {
-      const strikePhase = Math.max(0, Math.min(1, (castProgress - strikeStart) / (1 - strikeStart)));
-      const emerge = Math.min(1, strikePhase * 2.25);
-      const retreat = Math.max(0, Math.min(1, (strikePhase - 0.34) / 0.66));
-      const lift = Math.max(0, emerge * (1 - retreat * 0.9));
+    const strikeCenter = isCompactScreen ? 0.76 : 0.84;
+    const strikeWindowHalf = isCompactScreen ? 0.3 : 0.12;
+    const strikeBurstFromCast = Math.max(0, 1 - Math.abs(castProgress - strikeCenter) / strikeWindowHalf);
+    const strikeBurstForced = anim?.medusaStrikeBurstActive ? Math.max(0, Math.min(1, anim?.medusaStrikeBurstStrength ?? 1)) : 0;
+    const strikeBurst = Math.max(strikeBurstFromCast, strikeBurstForced);
+    if (strikeBurst > 0.015) {
+      const lift = Math.pow(strikeBurst, 0.7);
       const snakePalette = ['#4aa63b', '#7ef07a', '#9bff7a', '#d6ff9a', '#7ad160'];
-      const snakeCount = 144;
+      const compactBase = isLowEndMobile ? 22 : 34;
+      const compactExtra = isLowEndMobile ? 14 : 22;
+      const snakeCount = isCompactScreen
+        ? Math.max(18, Math.round(compactBase + strikeBurst * compactExtra))
+        : 132;
 
-      const impactFlash = Math.max(0, 1 - Math.abs(strikePhase - 0.15) / 0.15);
+      const impactFlash = Math.max(0, 1 - Math.abs(castProgress - strikeCenter) / (isCompactScreen ? 0.12 : 0.055));
       if (impactFlash > 0.02) {
         ctx.globalAlpha = 0.2 + impactFlash * 0.35;
         ctx.fillStyle = 'rgba(210,255,170,0.75)';
@@ -1258,8 +1311,8 @@ export function drawMedusa(
         const sy = fy * forward + ry * lateral + 8;
 
         const snakeLen = 18 + (i % 5) * 3 + lift * 20;
-        const segments = 9;
-        const phase = (time || 0) * 0.017 + variant * 0.55 + i * 0.73 + strikePhase * 7;
+        const segments = isCompactScreen ? 6 : 9;
+        const phase = (time || 0) * 0.017 + variant * 0.55 + i * 0.73 + strikeBurst * 6;
         const points: { x: number; y: number }[] = [];
         points.push({ x: sx, y: sy });
         for (let s = 1; s <= segments; s++) {
@@ -1273,7 +1326,7 @@ export function drawMedusa(
         }
 
         ctx.strokeStyle = 'rgba(60,28,10,0.64)';
-        ctx.lineWidth = 4.2;
+        ctx.lineWidth = isCompactScreen ? 3.2 : 4.2;
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
         ctx.beginPath();
@@ -1283,7 +1336,7 @@ export function drawMedusa(
 
         const snakeColor = snakePalette[i % snakePalette.length];
         ctx.strokeStyle = snakeColor;
-        ctx.lineWidth = 2.4;
+        ctx.lineWidth = isCompactScreen ? 1.9 : 2.4;
         ctx.beginPath();
         ctx.moveTo(points[0].x, points[0].y);
         for (let p = 1; p < points.length; p++) ctx.lineTo(points[p].x, points[p].y);

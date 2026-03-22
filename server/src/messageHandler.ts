@@ -49,6 +49,11 @@ export function handleClientMessage(
       // Check if player already joined
       if (gameState.getPlayer(playerId)) return;
 
+      // If this is the first active player in the room, boot a fresh world state.
+      if (gameState.getPlayerCount() === 0) {
+        gameState.resetSessionState();
+      }
+
       // Assign selected (or random) creep design and derive visual stats.
       const chosenDesign = isCreepDesign(message.creepDesign) ? message.creepDesign : randomCreepDesign();
       const stats = CREEP_STATS[chosenDesign];

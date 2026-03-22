@@ -106,6 +106,46 @@ const ENEMY_ARCHETYPES: EnemyArchetype[] = [
   { type: 'gargoyle', isBoss: true, tier: 'boss', count: 1, speed: 1.85, maxHealth: 420, aggroRange: 680, attackRange: 62, damage: 20, attackCooldownMs: 1700 },
 ];
 
+type HordeScalingProfile = {
+  countMultiplier: number;
+  healthMultiplier: number;
+  damageMultiplier: number;
+  speedMultiplier: number;
+  aggroBonus: number;
+  attackRangeBonus: number;
+  cooldownMultiplier: number;
+};
+
+const HORDE_SCALING_PROFILES: Record<number, HordeScalingProfile> = {
+  1: {
+    countMultiplier: 1,
+    healthMultiplier: 1,
+    damageMultiplier: 1,
+    speedMultiplier: 1,
+    aggroBonus: 0,
+    attackRangeBonus: 0,
+    cooldownMultiplier: 1,
+  },
+  2: {
+    countMultiplier: 1.3,
+    healthMultiplier: 1.35,
+    damageMultiplier: 1.25,
+    speedMultiplier: 1.08,
+    aggroBonus: 45,
+    attackRangeBonus: 4,
+    cooldownMultiplier: 0.93,
+  },
+  3: {
+    countMultiplier: 1.65,
+    healthMultiplier: 1.8,
+    damageMultiplier: 1.6,
+    speedMultiplier: 1.16,
+    aggroBonus: 95,
+    attackRangeBonus: 8,
+    cooldownMultiplier: 0.86,
+  },
+};
+
 function distanceSq(ax: number, ay: number, bx: number, by: number): number {
   const dx = ax - bx;
   const dy = ay - by;
@@ -339,10 +379,11 @@ function overlapsObstacle(px: number, py: number, obstacle: Obstacle): boolean {
   );
 }
 
-function generateEnemies(obstacles: Obstacle[]): Record<string, Enemy> {
+function generateEnemies(obstacles: Obstacle[], hordeLevel = 1): Record<string, Enemy> {
   const enemies: Record<string, Enemy> = {};
   const placed: Enemy[] = [];
   let enemyId = 0;
+  const profile = HORDE_SCALING_PROFILES[hordeLevel] ?? HORDE_SCALING_PROFILES[1];
 
   const canPlace = (x: number, y: number, enemyType: EnemyType): boolean => {
     if (x < OBSTACLE_PLACEMENT_MARGIN || x > WORLD_WIDTH - OBSTACLE_PLACEMENT_MARGIN) return false;
@@ -355,6 +396,7 @@ function generateEnemies(obstacles: Obstacle[]): Record<string, Enemy> {
 
   const addEnemy = (archetype: EnemyArchetype, x: number, y: number) => {
     const id = `enemy_${enemyId++}`;
+    const maxHealth = Math.max(1, Math.round(archetype.maxHealth * profile.healthMultiplier));
     const enemy: Enemy = {
       id,
       type: archetype.type,
@@ -366,13 +408,13 @@ function generateEnemies(obstacles: Obstacle[]): Record<string, Enemy> {
       targetY: y,
       homeX: x,
       homeY: y,
-      speed: archetype.speed,
-      maxHealth: archetype.maxHealth,
-      health: archetype.maxHealth,
-      aggroRange: archetype.aggroRange,
-      attackRange: archetype.attackRange,
-      damage: archetype.damage,
-      attackCooldownMs: archetype.attackCooldownMs,
+      speed: archetype.speed * profile.speedMultiplier,
+      maxHealth,
+      health: maxHealth,
+      aggroRange: archetype.aggroRange + profile.aggroBonus,
+      attackRange: archetype.attackRange + profile.attackRangeBonus,
+      damage: Math.max(1, Math.round(archetype.damage * profile.damageMultiplier)),
+      attackCooldownMs: Math.max(250, Math.round(archetype.attackCooldownMs * profile.cooldownMultiplier)),
       lastAttackTime: 0,
       activeStatuses: [],
     };
@@ -381,7 +423,8 @@ function generateEnemies(obstacles: Obstacle[]): Record<string, Enemy> {
   };
 
   for (const archetype of ENEMY_ARCHETYPES) {
-    for (let i = 0; i < archetype.count; i++) {
+    const countForHorde = Math.max(1, Math.round(archetype.count * profile.countMultiplier));
+    for (let i = 0; i < countForHorde; i++) {
       let spawnX = Math.round(OBSTACLE_PLACEMENT_MARGIN + Math.random() * (WORLD_WIDTH - OBSTACLE_PLACEMENT_MARGIN * 2));
       let spawnY = Math.round(OBSTACLE_PLACEMENT_MARGIN + Math.random() * (WORLD_HEIGHT - OBSTACLE_PLACEMENT_MARGIN * 2));
 
@@ -422,6 +465,8 @@ export class GameStateManager {
   private pendingAreaStrikes: PendingAreaStrike[] = [];
   private pendingMedusaDodges: PendingMedusaDodge[] = [];
   private batChannels: Record<string, BatChannelState> = {};
+  private currentHordeLevel = 1;
+  private readonly maxHordeLevel = 3;
 
   private state: GameState = {
     players: {},
@@ -434,7 +479,33 @@ export class GameStateManager {
   };
 
   constructor() {
-    this.state.enemies = generateEnemies(this.state.obstacles);
+    this.state.enemies = generateEnemies(this.state.obstacles, this.currentHordeLevel);
+  }
+
+  resetSessionState(): void {
+    const obstacles = generateObstacles();
+    this.sphynxPyramidOrder = {};
+    this.pendingAreaStrikes = [];
+    this.pendingMedusaDodges = [];
+    this.batChannels = {};
+    this.currentHordeLevel = 1;
+
+    this.state = {
+      players: {},
+      enemies: generateEnemies(obstacles, this.currentHordeLevel),
+      summons: {},
+      totalPlayers: 0,
+      tick: 0,
+      obstacles,
+      visibilityRadius: VISIBILITY_RADIUS,
+    };
+  }
+
+  private spawnNextEnemyHorde(): void {
+    if (this.currentHordeLevel >= this.maxHordeLevel) return;
+    const nextHordeLevel = this.currentHordeLevel + 1;
+    this.state.enemies = generateEnemies(this.state.obstacles, nextHordeLevel);
+    this.currentHordeLevel = nextHordeLevel;
   }
 
   addPlayer(player: Player): void {
@@ -634,6 +705,54 @@ export class GameStateManager {
     if (attacker.id === target.id) return false;
     if (attacker.isDead || target.isDead) return false;
     return attacker.pvpEnabled && target.pvpEnabled;
+  }
+
+  private resolveMeleeVisualTarget(
+    caster: Player,
+    range: number,
+    targetX?: number,
+    targetY?: number,
+    arcDegrees = 150
+  ): { x: number; y: number } {
+    const hasAim = typeof targetX === 'number' && typeof targetY === 'number';
+    const fallback = hasAim
+      ? this.clampTargetToRange(caster, Math.max(24, range), targetX, targetY)
+      : { x: Math.max(0, Math.min(WORLD_WIDTH, caster.x + Math.max(18, range * 0.68))), y: caster.y };
+    const aim = hasAim ? this.directionFromPlayer(caster, targetX, targetY) : { x: 1, y: 0 };
+    const arcCos = Math.cos((Math.max(15, Math.min(359, arcDegrees)) * Math.PI / 180) / 2);
+
+    let best: { x: number; y: number } | null = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    const consider = (tx: number, ty: number, radiusPad: number) => {
+      const dist = distance(caster.x, caster.y, tx, ty);
+      if (dist > range + radiusPad) return;
+
+      if (hasAim && arcDegrees < 359) {
+        const safeDist = Math.max(0.001, dist);
+        const dirX = (tx - caster.x) / safeDist;
+        const dirY = (ty - caster.y) / safeDist;
+        if ((dirX * aim.x + dirY * aim.y) < arcCos) return;
+      }
+
+      const score = distanceSq(tx, ty, fallback.x, fallback.y) + dist * dist * 0.14;
+      if (score < bestScore) {
+        bestScore = score;
+        best = { x: tx, y: ty };
+      }
+    };
+
+    for (const enemy of Object.values(this.state.enemies)) {
+      consider(enemy.x, enemy.y, ENEMY_RADIUS);
+    }
+
+    for (const target of Object.values(this.state.players)) {
+      if (target.id === caster.id || target.isDead) continue;
+      if (!this.isPvpAllowed(caster, target)) continue;
+      consider(target.x, target.y, PLAYER_RADIUS);
+    }
+
+    return best ?? fallback;
   }
 
   private applyAreaDamage(
@@ -1003,7 +1122,18 @@ export class GameStateManager {
         } else if (player.design === 'vampire') {
           this.applyMeleeHit(player, Math.max(1, Math.round(player.statDamage * 0.8)), ability.range + 2, now, targetX, targetY, 105, 0.22);
         } else if (player.design === 'bat') {
-          this.applyMeleeHit(player, Math.max(1, Math.round(player.statDamage * 0.68)), ability.range + 16, now, targetX, targetY, 82, 0.35);
+          const batBasicRange = ability.range + 16;
+          const batBasicArc = 82;
+          const visualTarget = this.resolveMeleeVisualTarget(player, batBasicRange, targetX, targetY, batBasicArc);
+          this.applyMeleeHit(player, Math.max(1, Math.round(player.statDamage * 0.68)), batBasicRange, now, targetX, targetY, batBasicArc, 0.35);
+          player.castState = {
+            slot: 'basic',
+            startedAtMs: now,
+            castDurationMs: ability.castMs,
+            targetX: visualTarget.x,
+            targetY: visualTarget.y,
+          };
+          assignedCastStateInSwitch = true;
         } else if (player.design === 'medusa') {
           this.applyMeleeHit(player, Math.max(1, Math.round(player.statDamage * 0.76)), ability.range + 10, now, targetX, targetY, 98);
         } else if (player.design === 'zombie') {
@@ -1696,6 +1826,9 @@ export class GameStateManager {
   incrementTick(): void {
     this.updateCombatTick(SERVER_TICK_MS);
     this.updateEnemies();
+    if (this.state.totalPlayers > 0 && Object.keys(this.state.enemies).length === 0) {
+      this.spawnNextEnemyHorde();
+    }
     this.state.tick++;
   }
 
